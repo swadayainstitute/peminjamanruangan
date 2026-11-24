@@ -1,0 +1,2399 @@
+<!DOCTYPE html>
+<html lang="id" class="light">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Sistem Peminjaman Ruangan Kelas - SWINS</title>
+    
+    <!-- Google Fonts: Plus Jakarta Sans & Inter -->
+    <link rel="preconnect" href="https://fonts.googleapis.com">
+    <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+    <link href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700&family=Plus+Jakarta+Sans:wght@600;700;800&display=swap" rel="stylesheet">
+    
+    <!-- Tailwind CSS -->
+    <script src="https://cdn.tailwindcss.com"></script>
+    <script>
+        tailwind.config = {
+            darkMode: 'class',
+            theme: {
+                extend: {
+                    fontFamily: {
+                        sans: ['Inter', 'sans-serif'],
+                        heading: ['Plus Jakarta Sans', 'sans-serif'],
+                    },
+                    colors: {
+                        primary: {
+                            50: '#eff6ff',
+                            100: '#dbeafe',
+                            600: '#2563eb',
+                            700: '#1d4ed8',
+                            800: '#1e40af',
+                            900: '#1e3a8a', // Biru Tua Institusional
+                        },
+                        accent: {
+                            400: '#fbbf24',
+                            500: '#f59e0b', // Oranye/Amber Aksen
+                            600: '#d97706',
+                        }
+                    }
+                }
+            }
+        }
+    </script>
+
+    <!-- Font Awesome Icons -->
+    <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.4.2/css/all.min.css">
+    
+    <!-- Chart.js untuk Grafik Dashboard -->
+    <script src="https://cdn.jsdelivr.net/npm/chart.js"></script>
+    
+    <!-- SheetJS (XLSX) untuk Ekspor Excel -->
+    <script src="https://cdn.jsdelivr.net/npm/xlsx@0.18.5/dist/xlsx.full.min.js"></script>
+    
+    <!-- jsPDF & AutoTable untuk Ekspor PDF -->
+    <script src="https://cdnjs.cloudflare.com/ajax/libs/jspdf/2.5.1/jspdf.umd.min.js"></script>
+    <script src="https://cdnjs.cloudflare.com/ajax/libs/jspdf-autotable/3.6.0/jspdf.plugin.autotable.min.js"></script>
+
+    <style>
+        /* Kustomisasi Scrollbar & Animasi Halus */
+        ::-webkit-scrollbar { width: 6px; height: 6px; }
+        ::-webkit-scrollbar-track { background: transparent; }
+        ::-webkit-scrollbar-thumb { background: #cbd5e1; border-radius: 9999px; }
+        .dark ::-webkit-scrollbar-thumb { background: #475569; }
+        
+        .fade-in { animation: fadeIn 0.3s ease-in-out; }
+        @keyframes fadeIn {
+            from { opacity: 0; transform: translateY(6px); }
+            to { opacity: 1; transform: translateY(0); }
+        }
+
+        /* Gaya Print Khusus */
+        @media print {
+            body * { visibility: hidden; }
+            #print-area, #print-area * { visibility: visible; }
+            #print-area { position: absolute; left: 0; top: 0; width: 100%; background: white; color: black; }
+            .no-print { display: none !important; }
+        }
+    </style>
+</head>
+<body class="bg-slate-50 text-slate-800 dark:bg-slate-900 dark:text-slate-100 transition-colors duration-200 min-h-screen flex flex-col">
+
+    <!-- ==================== KONFIGURASI SISTEM ==================== -->
+    <script>
+        /**
+         * KONFIGURASI UTAMA
+         * Ganti URL di bawah ini dengan URL Web App Google Apps Script Anda setelah di-deploy.
+         * Jika dibiarkan default ("ISI_URL_APPS_SCRIPT_DI_SINI"), aplikasi akan berjalan dalam MODE DEMO.
+         */
+        const API_URL = "https://script.google.com/macros/s/AKfycbxPcPMVlMmmZx6dAT0xwGDKnklYOu1-Hv63PYOque66qahGCJj5XTdaxycaKjyg7uIMGA/exec";
+    </script>
+
+    <!-- BANNER MODE DEMO (Otomatis muncul jika API_URL belum diisi) -->
+    <div id="demo-banner" class="hidden bg-accent-500 text-slate-950 px-4 py-2 text-xs sm:text-sm font-medium text-center shadow-sm z-50 flex items-center justify-center gap-2">
+        <i class="fa-solid fa-flask"></i>
+        <span><strong>Mode Demo</strong> – Data contoh aktif (belum tersambung ke Google Spreadsheet). PIN Demo Sarpras: <code class="bg-white/40 px-1.5 py-0.5 rounded font-bold">123456</code></span>
+    </div>
+
+    <!-- NAVBAR UTAMA -->
+    <header class="bg-white dark:bg-slate-800 border-b border-slate-200 dark:border-slate-700 sticky top-0 z-40 shadow-sm">
+        <div class="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8 h-16 flex items-center justify-between">
+            <!-- Logo & Brand -->
+            <div class="flex items-center gap-3 cursor-pointer" onclick="switchMainView('peminjam')">
+                <div class="w-10 h-10 rounded-xl bg-primary-900 text-white flex items-center justify-center font-heading font-extrabold text-xl shadow-md">
+                    S
+                </div>
+                <div>
+                    <h1 class="font-heading font-bold text-base sm:text-lg text-primary-900 dark:text-white leading-tight">SWINS RoomBook</h1>
+                    <p class="text-[11px] text-slate-500 dark:text-slate-400">Sistem Peminjaman Ruangan Kelas</p>
+                </div>
+            </div>
+
+            <!-- Navigasi & Aksi Kanan -->
+            <div class="flex items-center gap-2 sm:gap-3">
+                <!-- Toggle Peran: Peminjam vs Sarpras -->
+                <div class="bg-slate-100 dark:bg-slate-700 p-1 rounded-xl flex items-center text-xs sm:text-sm font-medium">
+                    <button id="btn-role-peminjam" onclick="switchMainView('peminjam')" class="px-3 py-1.5 rounded-lg bg-white dark:bg-slate-600 text-primary-900 dark:text-white shadow-sm transition-all flex items-center gap-1.5">
+                        <i class="fa-solid fa-user-graduate"></i>
+                        <span class="hidden sm:inline">Portal Peminjam</span>
+                        <span class="sm:hidden">Peminjam</span>
+                    </button>
+                    <button id="btn-role-sarpras" onclick="requestSarprasAccess()" class="px-3 py-1.5 rounded-lg text-slate-600 dark:text-slate-300 hover:text-primary-900 dark:hover:text-white transition-all flex items-center gap-1.5">
+                        <i class="fa-solid fa-shield-halved"></i>
+                        <span class="hidden sm:inline">Admin Sarpras</span>
+                        <span class="sm:hidden">Sarpras</span>
+                    </button>
+                </div>
+
+                <!-- Tombol Dark Mode -->
+                <button onclick="toggleDarkMode()" aria-label="Ubah Tema" class="p-2.5 rounded-xl bg-slate-100 dark:bg-slate-700 text-slate-600 dark:text-slate-300 hover:bg-slate-200 dark:hover:bg-slate-600 transition-colors">
+                    <i id="theme-icon" class="fa-solid fa-moon"></i>
+                </button>
+            </div>
+        </div>
+    </header>
+
+    <!-- ==================== AREA KONTEN UTAMA ==================== -->
+    <main class="flex-grow">
+        
+        <!-- ========================================================== -->
+        <!-- 1. HALAMAN PORTAL PEMINJAM                                 -->
+        <!-- ========================================================== -->
+        <div id="view-peminjam" class="fade-in">
+            <!-- Hero Section -->
+            <section class="bg-gradient-to-br from-primary-900 via-primary-800 to-blue-900 text-white py-10 sm:py-14 px-4">
+                <div class="max-w-7xl mx-auto flex flex-col lg:flex-row items-center justify-between gap-8">
+                    <div class="max-w-2xl text-center lg:text-left">
+                        <span class="inline-flex items-center gap-2 px-3 py-1 rounded-full bg-white/10 text-accent-400 text-xs font-semibold mb-4 border border-white/15">
+                            <i class="fa-solid fa-clock"></i> Jam Operasional: <span id="hero-jam-ops">08:00 - 16:00 WIB</span> &bull; Maks. <span id="hero-max-durasi">4</span> Jam/Sesi
+                        </span>
+                        <h2 class="font-heading text-2xl sm:text-4xl font-extrabold tracking-tight mb-3">
+                            Reservasi Ruangan Kelas & Laboratorium SWINS
+                        </h2>
+                        <p class="text-blue-100 text-sm sm:text-base mb-6 leading-relaxed">
+                            Ajukan peminjaman ruang kuliah, laboratorium komputer, podcast, hingga smartclassroom secara daring. Cek jadwal kosong secara real-time dan pantau status persetujuan Anda.
+                        </p>
+                        <div class="flex flex-wrap items-center justify-center lg:justify-start gap-3">
+                            <a href="#section-form" onclick="switchPeminjamTab('form')" class="px-5 py-3 rounded-xl bg-accent-500 hover:bg-accent-600 text-slate-950 font-bold text-sm shadow-lg shadow-amber-500/20 transition-all flex items-center gap-2">
+                                <i class="fa-solid fa-calendar-plus"></i> Ajukan Peminjaman
+                            </a>
+                            <a href="#section-form" onclick="switchPeminjamTab('jadwal')" class="px-5 py-3 rounded-xl bg-white/10 hover:bg-white/20 text-white font-semibold text-sm backdrop-blur-sm border border-white/20 transition-all flex items-center gap-2">
+                                <i class="fa-solid fa-calendar-days"></i> Cek Jadwal Ruangan
+                            </a>
+                            <a href="#section-form" onclick="switchPeminjamTab('status')" class="px-5 py-3 rounded-xl bg-white/10 hover:bg-white/20 text-white font-semibold text-sm backdrop-blur-sm border border-white/20 transition-all flex items-center gap-2">
+                                <i class="fa-solid fa-magnifying-glass"></i> Cek Status Pengajuan
+                            </a>
+                        </div>
+                    </div>
+
+                    <!-- Kartu Ketentuan Singkat -->
+                    <div class="w-full lg:w-96 bg-white/10 backdrop-blur-md border border-white/15 rounded-2xl p-5 text-sm shadow-xl">
+                        <h3 class="font-heading font-bold text-base text-accent-400 mb-3 flex items-center gap-2">
+                            <i class="fa-solid fa-circle-info"></i> Ketentuan Peminjaman
+                        </h3>
+                        <ul class="space-y-2.5 text-blue-50 text-xs sm:text-sm">
+                            <li class="flex items-start gap-2.5">
+                                <i class="fa-solid fa-check-circle text-accent-400 mt-0.5"></i>
+                                <span>Layanan operasional pukul <strong>08:00 – 16:00 WIB</strong>.</span>
+                            </li>
+                            <li class="flex items-start gap-2.5">
+                                <i class="fa-solid fa-check-circle text-accent-400 mt-0.5"></i>
+                                <span>Durasi maksimal <strong>4 jam</strong> per sesi pengajuan.</span>
+                            </li>
+                            <li class="flex items-start gap-2.5">
+                                <i class="fa-solid fa-check-circle text-accent-400 mt-0.5"></i>
+                                <span>Jumlah peserta wajib mematuhi kapasitas maksimal ruangan.</span>
+                            </li>
+                            <li class="flex items-start gap-2.5">
+                                <i class="fa-solid fa-check-circle text-accent-400 mt-0.5"></i>
+                                <span>Simpan <strong>ID Peminjaman</strong> setelah mengirim formulir untuk melacak verifikasi Sarpras.</span>
+                            </li>
+                        </ul>
+                    </div>
+                </div>
+            </section>
+
+            <!-- Tab Navigasi Portal Peminjam -->
+            <div id="section-form" class="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8 py-8">
+                <div class="flex flex-wrap gap-2 border-b border-slate-200 dark:border-slate-700 pb-4 mb-6">
+                    <button id="tab-btn-form" onclick="switchPeminjamTab('form')" class="px-4 py-2.5 rounded-xl font-semibold text-sm bg-primary-900 text-white shadow-sm transition-all flex items-center gap-2">
+                        <i class="fa-solid fa-file-signature"></i> Formulir Peminjaman
+                    </button>
+                    <button id="tab-btn-jadwal" onclick="switchPeminjamTab('jadwal')" class="px-4 py-2.5 rounded-xl font-semibold text-sm bg-white dark:bg-slate-800 text-slate-600 dark:text-slate-300 border border-slate-200 dark:border-slate-700 hover:bg-slate-50 transition-all flex items-center gap-2">
+                        <i class="fa-solid fa-table-cells"></i> Ketersediaan & Jadwal
+                    </button>
+                    <button id="tab-btn-status" onclick="switchPeminjamTab('status')" class="px-4 py-2.5 rounded-xl font-semibold text-sm bg-white dark:bg-slate-800 text-slate-600 dark:text-slate-300 border border-slate-200 dark:border-slate-700 hover:bg-slate-50 transition-all flex items-center gap-2">
+                        <i class="fa-solid fa-ticket"></i> Lacak Status Peminjaman
+                    </button>
+                </div>
+
+                <!-- TAB 1: FORMULIR PEMINJAMAN -->
+                <div id="peminjam-tab-form" class="grid grid-cols-1 lg:grid-cols-3 gap-6 fade-in">
+                    <div class="lg:col-span-2 bg-white dark:bg-slate-800 rounded-2xl shadow-sm border border-slate-200 dark:border-slate-700 p-6 sm:p-8">
+                        <div class="mb-6">
+                            <h3 class="font-heading text-xl font-bold text-slate-900 dark:text-white">Formulir Pengajuan Ruangan</h3>
+                            <p class="text-sm text-slate-500 dark:text-slate-400">Lengkapi seluruh data di bawah ini dengan benar. Kolom bertanda <span class="text-red-500">*</span> wajib diisi.</p>
+                        </div>
+
+                        <!-- Alert Peringatan Bentrok / Error Validasi -->
+                        <div id="form-alert" class="hidden mb-6 p-4 rounded-xl bg-red-50 dark:bg-red-900/30 border border-red-200 dark:border-red-800 text-red-700 dark:text-red-300 text-sm flex items-start gap-3">
+                            <i class="fa-solid fa-triangle-exclamation mt-0.5 text-base"></i>
+                            <div id="form-alert-text"></div>
+                        </div>
+
+                        <form id="booking-form" onsubmit="handleBookingSubmit(event)" class="space-y-5">
+                            <!-- Identitas Peminjam -->
+                            <div class="grid grid-cols-1 sm:grid-cols-2 gap-4">
+                                <div>
+                                    <label class="block text-xs font-semibold uppercase tracking-wider text-slate-600 dark:text-slate-300 mb-1.5">Nama Lengkap Peminjam <span class="text-red-500">*</span></label>
+                                    <input type="text" id="input-nama" required placeholder="Contoh: Dr. Budi Santoso, M.Kom" class="w-full px-4 py-2.5 rounded-xl border border-slate-300 dark:border-slate-600 bg-white dark:bg-slate-700 text-sm focus:ring-2 focus:ring-primary-600 focus:border-transparent outline-none">
+                                </div>
+                                <div>
+                                    <label class="block text-xs font-semibold uppercase tracking-wider text-slate-600 dark:text-slate-300 mb-1.5">Status Peminjam <span class="text-red-500">*</span></label>
+                                    <select id="input-status-peminjam" required class="w-full px-4 py-2.5 rounded-xl border border-slate-300 dark:border-slate-600 bg-white dark:bg-slate-700 text-sm focus:ring-2 focus:ring-primary-600 outline-none">
+                                        <option value="">-- Pilih Status --</option>
+                                        <option value="Dosen">Dosen</option>
+                                        <option value="Mahasiswa">Mahasiswa</option>
+                                        <option value="Struktural">Struktural</option>
+                                        <option value="BEM/ UKM/ Organisasi">BEM/ UKM/ Organisasi</option>
+                                        <option value="Umum">Umum</option>
+                                    </select>
+                                </div>
+                            </div>
+
+                            <div class="grid grid-cols-1 sm:grid-cols-2 gap-4">
+                                <div>
+                                    <label class="block text-xs font-semibold uppercase tracking-wider text-slate-600 dark:text-slate-300 mb-1.5">NIM / NIP / NIK <span class="text-red-500">*</span></label>
+                                    <input type="text" id="input-nim" required placeholder="Nomor Identitas Resmi" class="w-full px-4 py-2.5 rounded-xl border border-slate-300 dark:border-slate-600 bg-white dark:bg-slate-700 text-sm focus:ring-2 focus:ring-primary-600 outline-none">
+                                </div>
+                                <div>
+                                    <label class="block text-xs font-semibold uppercase tracking-wider text-slate-600 dark:text-slate-300 mb-1.5">Program Studi / Unit / Instansi <span class="text-red-500">*</span></label>
+                                    <input type="text" id="input-prodi" required placeholder="Contoh: Teknik Informatika / BEM SWINS" class="w-full px-4 py-2.5 rounded-xl border border-slate-300 dark:border-slate-600 bg-white dark:bg-slate-700 text-sm focus:ring-2 focus:ring-primary-600 outline-none">
+                                </div>
+                            </div>
+
+                            <div class="grid grid-cols-1 sm:grid-cols-2 gap-4">
+                                <div>
+                                    <label class="block text-xs font-semibold uppercase tracking-wider text-slate-600 dark:text-slate-300 mb-1.5">No. WhatsApp Aktif <span class="text-red-500">*</span></label>
+                                    <input type="tel" id="input-wa" required placeholder="Contoh: 081234567890" class="w-full px-4 py-2.5 rounded-xl border border-slate-300 dark:border-slate-600 bg-white dark:bg-slate-700 text-sm focus:ring-2 focus:ring-primary-600 outline-none">
+                                </div>
+                                <div>
+                                    <label class="block text-xs font-semibold uppercase tracking-wider text-slate-600 dark:text-slate-300 mb-1.5">Alamat Email <span class="text-red-500">*</span></label>
+                                    <input type="email" id="input-email" required placeholder="nama@swins.ac.id" class="w-full px-4 py-2.5 rounded-xl border border-slate-300 dark:border-slate-600 bg-white dark:bg-slate-700 text-sm focus:ring-2 focus:ring-primary-600 outline-none">
+                                </div>
+                            </div>
+
+                            <hr class="border-slate-200 dark:border-slate-700 my-2">
+
+                            <!-- Detail Ruangan & Waktu -->
+                            <div class="grid grid-cols-1 sm:grid-cols-3 gap-4">
+                                <div class="sm:col-span-2">
+                                    <label class="block text-xs font-semibold uppercase tracking-wider text-slate-600 dark:text-slate-300 mb-1.5">Pilih Ruangan <span class="text-red-500">*</span></label>
+                                    <select id="input-ruangan" required onchange="onRoomSelectChange(); checkRealtimeConflict();" class="w-full px-4 py-2.5 rounded-xl border border-slate-300 dark:border-slate-600 bg-white dark:bg-slate-700 text-sm focus:ring-2 focus:ring-primary-600 outline-none">
+                                        <option value="">-- Memuat daftar ruangan... --</option>
+                                    </select>
+                                    <p id="room-info-hint" class="text-xs text-primary-700 dark:text-blue-400 mt-1.5 font-medium hidden"></p>
+                                </div>
+                                <div>
+                                    <label class="block text-xs font-semibold uppercase tracking-wider text-slate-600 dark:text-slate-300 mb-1.5">Jumlah Peserta <span class="text-red-500">*</span></label>
+                                    <input type="number" id="input-peserta" required min="1" placeholder="Orang" class="w-full px-4 py-2.5 rounded-xl border border-slate-300 dark:border-slate-600 bg-white dark:bg-slate-700 text-sm focus:ring-2 focus:ring-primary-600 outline-none">
+                                </div>
+                            </div>
+
+                            <div class="grid grid-cols-1 sm:grid-cols-3 gap-4">
+                                <div>
+                                    <label class="block text-xs font-semibold uppercase tracking-wider text-slate-600 dark:text-slate-300 mb-1.5">Tanggal Peminjaman <span class="text-red-500">*</span></label>
+                                    <input type="date" id="input-tanggal" required onchange="checkRealtimeConflict()" class="w-full px-4 py-2.5 rounded-xl border border-slate-300 dark:border-slate-600 bg-white dark:bg-slate-700 text-sm focus:ring-2 focus:ring-primary-600 outline-none">
+                                </div>
+                                <div>
+                                    <label class="block text-xs font-semibold uppercase tracking-wider text-slate-600 dark:text-slate-300 mb-1.5">Jam Mulai (WIB) <span class="text-red-500">*</span></label>
+                                    <input type="time" id="input-jam-mulai" required min="08:00" max="16:00" onchange="checkRealtimeConflict()" class="w-full px-4 py-2.5 rounded-xl border border-slate-300 dark:border-slate-600 bg-white dark:bg-slate-700 text-sm focus:ring-2 focus:ring-primary-600 outline-none">
+                                </div>
+                                <div>
+                                    <label class="block text-xs font-semibold uppercase tracking-wider text-slate-600 dark:text-slate-300 mb-1.5">Jam Selesai (WIB) <span class="text-red-500">*</span></label>
+                                    <input type="time" id="input-jam-selesai" required min="08:00" max="16:00" onchange="checkRealtimeConflict()" class="w-full px-4 py-2.5 rounded-xl border border-slate-300 dark:border-slate-600 bg-white dark:bg-slate-700 text-sm focus:ring-2 focus:ring-primary-600 outline-none">
+                                </div>
+                            </div>
+
+                            <!-- Indikator Bentrok Real-time -->
+                            <div id="realtime-conflict-box" class="hidden p-3.5 rounded-xl text-xs font-medium flex items-center gap-2.5"></div>
+
+                            <div>
+                                <label class="block text-xs font-semibold uppercase tracking-wider text-slate-600 dark:text-slate-300 mb-1.5">Keperluan / Nama Kegiatan <span class="text-red-500">*</span></label>
+                                <textarea id="input-keperluan" rows="2" required placeholder="Jelaskan secara singkat kegiatan yang akan dilaksanakan..." class="w-full px-4 py-2.5 rounded-xl border border-slate-300 dark:border-slate-600 bg-white dark:bg-slate-700 text-sm focus:ring-2 focus:ring-primary-600 outline-none"></textarea>
+                            </div>
+
+                            <!-- Checkbox Fasilitas Tambahan -->
+                            <div>
+                                <label class="block text-xs font-semibold uppercase tracking-wider text-slate-600 dark:text-slate-300 mb-2">Kebutuhan Fasilitas Tambahan</label>
+                                <div class="grid grid-cols-2 sm:grid-cols-4 gap-2.5" id="fasilitas-checkbox-group">
+                                    <label class="flex items-center gap-2 p-2.5 rounded-xl border border-slate-200 dark:border-slate-700 hover:bg-slate-50 dark:hover:bg-slate-700/50 cursor-pointer text-xs font-medium">
+                                        <input type="checkbox" name="fasilitas" value="Proyektor" class="rounded text-primary-600 focus:ring-primary-500"> Proyektor
+                                    </label>
+                                    <label class="flex items-center gap-2 p-2.5 rounded-xl border border-slate-200 dark:border-slate-700 hover:bg-slate-50 dark:hover:bg-slate-700/50 cursor-pointer text-xs font-medium">
+                                        <input type="checkbox" name="fasilitas" value="Soundsystem" class="rounded text-primary-600 focus:ring-primary-500"> Soundsystem
+                                    </label>
+                                    <label class="flex items-center gap-2 p-2.5 rounded-xl border border-slate-200 dark:border-slate-700 hover:bg-slate-50 dark:hover:bg-slate-700/50 cursor-pointer text-xs font-medium">
+                                        <input type="checkbox" name="fasilitas" value="Mic Wireless" class="rounded text-primary-600 focus:ring-primary-500"> Mic Wireless
+                                    </label>
+                                    <label class="flex items-center gap-2 p-2.5 rounded-xl border border-slate-200 dark:border-slate-700 hover:bg-slate-50 dark:hover:bg-slate-700/50 cursor-pointer text-xs font-medium">
+                                        <input type="checkbox" name="fasilitas" value="AC" class="rounded text-primary-600 focus:ring-primary-500"> AC
+                                    </label>
+                                    <label class="flex items-center gap-2 p-2.5 rounded-xl border border-slate-200 dark:border-slate-700 hover:bg-slate-50 dark:hover:bg-slate-700/50 cursor-pointer text-xs font-medium">
+                                        <input type="checkbox" name="fasilitas" value="Whiteboard" class="rounded text-primary-600 focus:ring-primary-500"> Whiteboard
+                                    </label>
+                                    <label class="flex items-center gap-2 p-2.5 rounded-xl border border-slate-200 dark:border-slate-700 hover:bg-slate-50 dark:hover:bg-slate-700/50 cursor-pointer text-xs font-medium">
+                                        <input type="checkbox" name="fasilitas" value="Kamera" class="rounded text-primary-600 focus:ring-primary-500"> Kamera
+                                    </label>
+                                    <label class="flex items-center gap-2 p-2.5 rounded-xl border border-slate-200 dark:border-slate-700 hover:bg-slate-50 dark:hover:bg-slate-700/50 cursor-pointer text-xs font-medium">
+                                        <input type="checkbox" name="fasilitas" value="Lighting" class="rounded text-primary-600 focus:ring-primary-500"> Lighting
+                                    </label>
+                                    <label class="flex items-center gap-2 p-2.5 rounded-xl border border-slate-200 dark:border-slate-700 hover:bg-slate-50 dark:hover:bg-slate-700/50 cursor-pointer text-xs font-medium">
+                                        <input type="checkbox" id="chk-fasilitas-lainnya" name="fasilitas" value="Lainnya" onchange="toggleFasilitasLainnya()" class="rounded text-primary-600 focus:ring-primary-500"> Lainnya
+                                    </label>
+                                </div>
+                                <input type="text" id="input-fasilitas-lainnya" placeholder="Sebutkan fasilitas tambahan lainnya..." class="hidden mt-2.5 w-full px-4 py-2 rounded-xl border border-slate-300 dark:border-slate-600 bg-white dark:bg-slate-700 text-xs outline-none">
+                            </div>
+
+                            <div class="pt-2">
+                                <button type="submit" id="btn-submit-booking" class="w-full py-3.5 px-6 rounded-xl bg-primary-900 hover:bg-primary-800 text-white font-bold text-sm shadow-md transition-all flex items-center justify-center gap-2">
+                                    <i class="fa-solid fa-paper-plane"></i>
+                                    <span>Kirim Pengajuan Peminjaman</span>
+                                </button>
+                            </div>
+                        </form>
+                    </div>
+
+                    <!-- Sidebar Info Ruangan Tersedia -->
+                    <div class="space-y-4">
+                        <div class="bg-white dark:bg-slate-800 rounded-2xl shadow-sm border border-slate-200 dark:border-slate-700 p-5">
+                            <h4 class="font-heading font-bold text-base text-slate-900 dark:text-white mb-3 flex items-center gap-2">
+                                <i class="fa-solid fa-door-open text-primary-600"></i> Daftar Ruangan SWINS
+                            </h4>
+                            <div id="sidebar-room-list" class="space-y-3">
+                                <!-- Diisi dinamis oleh JS -->
+                            </div>
+                        </div>
+                    </div>
+                </div>
+
+                <!-- TAB 2: CEK KETERSEDIAAN & JADWAL RUANGAN -->
+                <div id="peminjam-tab-jadwal" class="hidden fade-in space-y-6">
+                    <div class="bg-white dark:bg-slate-800 rounded-2xl shadow-sm border border-slate-200 dark:border-slate-700 p-6">
+                        <div class="flex flex-col sm:flex-row sm:items-center justify-between gap-4 mb-6">
+                            <div>
+                                <h3 class="font-heading text-lg font-bold text-slate-900 dark:text-white">Timeline Ketersediaan Ruangan</h3>
+                                <p class="text-xs text-slate-500 dark:text-slate-400">Pantau slot waktu yang sudah terisi (08:00 - 16:00 WIB) sebelum mengajukan peminjaman.</p>
+                            </div>
+                            <div class="flex flex-wrap items-center gap-3">
+                                <input type="date" id="schedule-date-filter" onchange="renderRoomTimeline()" class="px-3.5 py-2 rounded-xl border border-slate-300 dark:border-slate-600 bg-white dark:bg-slate-700 text-sm outline-none">
+                                <button onclick="refreshAllData()" class="px-3.5 py-2 rounded-xl bg-slate-100 dark:bg-slate-700 hover:bg-slate-200 text-xs font-semibold flex items-center gap-1.5">
+                                    <i class="fa-solid fa-rotate"></i> Segarkan
+                                </button>
+                            </div>
+                        </div>
+
+                        <!-- Legenda Status -->
+                        <div class="flex flex-wrap items-center gap-4 text-xs mb-4 bg-slate-50 dark:bg-slate-900/50 p-3 rounded-xl">
+                            <span class="font-semibold text-slate-600 dark:text-slate-300">Keterangan:</span>
+                            <span class="flex items-center gap-1.5"><span class="w-3 h-3 rounded-full bg-emerald-500 inline-block"></span> Disetujui (Terpakai)</span>
+                            <span class="flex items-center gap-1.5"><span class="w-3 h-3 rounded-full bg-amber-400 inline-block"></span> Menunggu Verifikasi</span>
+                            <span class="flex items-center gap-1.5"><span class="w-3 h-3 rounded-full bg-slate-200 dark:bg-slate-700 border border-slate-300 inline-block"></span> Tersedia</span>
+                        </div>
+
+                        <!-- Tabel Timeline -->
+                        <div class="overflow-x-auto">
+                            <table class="w-full text-left border-collapse min-w-[750px]">
+                                <thead>
+                                    <tr class="border-b border-slate-200 dark:border-slate-700 text-xs font-bold text-slate-500 dark:text-slate-400 uppercase">
+                                        <th class="py-3 px-3 w-52">Ruangan</th>
+                                        <th class="py-3 px-2 text-center">08:00</th>
+                                        <th class="py-3 px-2 text-center">09:00</th>
+                                        <th class="py-3 px-2 text-center">10:00</th>
+                                        <th class="py-3 px-2 text-center">11:00</th>
+                                        <th class="py-3 px-2 text-center">12:00</th>
+                                        <th class="py-3 px-2 text-center">13:00</th>
+                                        <th class="py-3 px-2 text-center">14:00</th>
+                                        <th class="py-3 px-2 text-center">15:00</th>
+                                    </tr>
+                                </thead>
+                                <tbody id="timeline-tbody" class="divide-y divide-slate-100 dark:divide-slate-700/60 text-xs">
+                                    <!-- Diisi dinamis oleh JS -->
+                                </tbody>
+                            </table>
+                        </div>
+                    </div>
+                </div>
+
+                <!-- TAB 3: CEK STATUS PENGAJUAN -->
+                <div id="peminjam-tab-status" class="hidden fade-in max-w-3xl mx-auto">
+                    <div class="bg-white dark:bg-slate-800 rounded-2xl shadow-sm border border-slate-200 dark:border-slate-700 p-6 sm:p-8">
+                        <h3 class="font-heading text-xl font-bold text-slate-900 dark:text-white mb-2">Lacak Status Pengajuan Peminjaman</h3>
+                        <p class="text-sm text-slate-500 dark:text-slate-400 mb-6">Masukkan <strong>ID Peminjaman</strong> (contoh: <code class="text-primary-700 dark:text-blue-400">PJM-20261123-001</code>) atau <strong>Nomor WhatsApp</strong> yang Anda daftarkan.</p>
+
+                        <div class="flex flex-col sm:flex-row gap-3 mb-6">
+                            <input type="text" id="input-track-query" placeholder="Ketik ID Peminjaman atau No. WhatsApp..." class="flex-grow px-4 py-3 rounded-xl border border-slate-300 dark:border-slate-600 bg-white dark:bg-slate-700 text-sm focus:ring-2 focus:ring-primary-600 outline-none">
+                            <button onclick="searchBookingStatus()" class="px-6 py-3 rounded-xl bg-primary-900 hover:bg-primary-800 text-white font-semibold text-sm flex items-center justify-center gap-2 transition-all">
+                                <i class="fa-solid fa-search"></i> Cari Pengajuan
+                            </button>
+                        </div>
+
+                        <div id="track-results" class="space-y-4">
+                            <!-- Hasil pencarian muncul di sini -->
+                            <div class="text-center py-8 text-slate-400 text-sm">
+                                <i class="fa-solid fa-magnifying-glass text-3xl mb-2 opacity-40"></i>
+                                <p>Masukkan ID atau Nomor WhatsApp untuk melihat riwayat & status verifikasi.</p>
+                            </div>
+                        </div>
+                    </div>
+                </div>
+            </div>
+        </div>
+
+        <!-- ========================================================== -->
+        <!-- 2. HALAMAN DASHBOARD SARPRAS (DILINDUNGI PIN)              -->
+        <!-- ========================================================== -->
+        <div id="view-sarpras" class="hidden fade-in">
+            <div class="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8 py-6">
+                <div class="flex flex-col lg:flex-row gap-6">
+                    
+                    <!-- Sidebar Navigasi Sarpras -->
+                    <aside class="w-full lg:w-64 flex-shrink-0">
+                        <div class="bg-white dark:bg-slate-800 rounded-2xl shadow-sm border border-slate-200 dark:border-slate-700 p-4 sticky top-20">
+                            <div class="flex items-center gap-3 px-3 py-2.5 mb-3 bg-primary-50 dark:bg-slate-700/60 rounded-xl">
+                                <div class="w-9 h-9 rounded-full bg-primary-900 text-white flex items-center justify-center font-bold text-sm">
+                                    <i class="fa-solid fa-user-tie"></i>
+                                </div>
+                                <div>
+                                    <p class="text-xs font-bold text-primary-900 dark:text-white">Admin Sarpras</p>
+                                    <p class="text-[11px] text-slate-500 dark:text-slate-400">SWINS Facilities</p>
+                                </div>
+                            </div>
+
+                            <nav class="flex lg:flex-col gap-1.5 overflow-x-auto pb-1 lg:pb-0">
+                                <button onclick="switchSarprasMenu('dashboard')" id="nav-sarpras-dashboard" class="sarpras-nav-btn w-full text-left px-3.5 py-2.5 rounded-xl text-sm font-semibold bg-primary-900 text-white flex items-center gap-2.5 whitespace-nowrap">
+                                    <i class="fa-solid fa-chart-pie w-4"></i> Dashboard & Analitik
+                                </button>
+                                <button onclick="switchSarprasMenu('pengajuan')" id="nav-sarpras-pengajuan" class="sarpras-nav-btn w-full text-left px-3.5 py-2.5 rounded-xl text-sm font-medium text-slate-600 dark:text-slate-300 hover:bg-slate-100 dark:hover:bg-slate-700 flex items-center justify-between whitespace-nowrap">
+                                    <span class="flex items-center gap-2.5"><i class="fa-solid fa-list-check w-4"></i> Manajemen Pengajuan</span>
+                                    <span id="badge-pending-count" class="px-2 py-0.5 text-[11px] font-bold rounded-full bg-amber-100 text-amber-800">0</span>
+                                </button>
+                                <button onclick="switchSarprasMenu('laporan')" id="nav-sarpras-laporan" class="sarpras-nav-btn w-full text-left px-3.5 py-2.5 rounded-xl text-sm font-medium text-slate-600 dark:text-slate-300 hover:bg-slate-100 dark:hover:bg-slate-700 flex items-center gap-2.5 whitespace-nowrap">
+                                    <i class="fa-solid fa-file-export w-4"></i> Laporan & Ekspor
+                                </button>
+                                <button onclick="switchSarprasMenu('ruangan')" id="nav-sarpras-ruangan" class="sarpras-nav-btn w-full text-left px-3.5 py-2.5 rounded-xl text-sm font-medium text-slate-600 dark:text-slate-300 hover:bg-slate-100 dark:hover:bg-slate-700 flex items-center gap-2.5 whitespace-nowrap">
+                                    <i class="fa-solid fa-building w-4"></i> Master Ruangan
+                                </button>
+                                <hr class="hidden lg:block border-slate-200 dark:border-slate-700 my-2">
+                                <button onclick="logoutSarpras()" class="w-full text-left px-3.5 py-2.5 rounded-xl text-sm font-medium text-red-600 hover:bg-red-50 dark:hover:bg-red-900/20 flex items-center gap-2.5 whitespace-nowrap">
+                                    <i class="fa-solid fa-right-from-bracket w-4"></i> Keluar Sesi
+                                </button>
+                            </nav>
+                        </div>
+                    </aside>
+
+                    <!-- Konten Utama Sarpras -->
+                    <div class="flex-grow min-w-0 space-y-6">
+
+                        <!-- SUB-HALAMAN A: DASHBOARD ANALITIK -->
+                        <div id="sarpras-sec-dashboard" class="space-y-6 fade-in">
+                            <div class="flex flex-col sm:flex-row sm:items-center justify-between gap-3">
+                                <div>
+                                    <h2 class="font-heading text-xl sm:text-2xl font-bold text-slate-900 dark:text-white">Dashboard Sarana & Prasarana</h2>
+                                    <p class="text-xs text-slate-500 dark:text-slate-400" id="current-date-display">Memuat tanggal...</p>
+                                </div>
+                                <button onclick="refreshAllData()" class="px-4 py-2 rounded-xl bg-white dark:bg-slate-800 border border-slate-200 dark:border-slate-700 text-xs font-semibold hover:bg-slate-50 flex items-center gap-2 self-start">
+                                    <i class="fa-solid fa-arrows-rotate"></i> Sinkronisasi Data
+                                </button>
+                            </div>
+
+                            <!-- Filter Global Dashboard -->
+                            <div class="bg-white dark:bg-slate-800 rounded-2xl p-4 shadow-sm border border-slate-200 dark:border-slate-700 grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-5 gap-3">
+                                <div>
+                                    <label class="block text-[11px] font-semibold text-slate-500 mb-1">Dari Tanggal</label>
+                                    <input type="date" id="dash-filter-start" onchange="updateDashboardAnalytics()" class="w-full px-3 py-2 rounded-xl border border-slate-200 dark:border-slate-600 bg-slate-50 dark:bg-slate-700 text-xs">
+                                </div>
+                                <div>
+                                    <label class="block text-[11px] font-semibold text-slate-500 mb-1">Sampai Tanggal</label>
+                                    <input type="date" id="dash-filter-end" onchange="updateDashboardAnalytics()" class="w-full px-3 py-2 rounded-xl border border-slate-200 dark:border-slate-600 bg-slate-50 dark:bg-slate-700 text-xs">
+                                </div>
+                                <div>
+                                    <label class="block text-[11px] font-semibold text-slate-500 mb-1">Ruangan</label>
+                                    <select id="dash-filter-room" onchange="updateDashboardAnalytics()" class="w-full px-3 py-2 rounded-xl border border-slate-200 dark:border-slate-600 bg-slate-50 dark:bg-slate-700 text-xs">
+                                        <option value="ALL">Semua Ruangan</option>
+                                    </select>
+                                </div>
+                                <div>
+                                    <label class="block text-[11px] font-semibold text-slate-500 mb-1">Status</label>
+                                    <select id="dash-filter-status" onchange="updateDashboardAnalytics()" class="w-full px-3 py-2 rounded-xl border border-slate-200 dark:border-slate-600 bg-slate-50 dark:bg-slate-700 text-xs">
+                                        <option value="ALL">Semua Status</option>
+                                        <option value="Menunggu">Menunggu</option>
+                                        <option value="Disetujui">Disetujui</option>
+                                        <option value="Ditolak">Ditolak</option>
+                                        <option value="Selesai">Selesai</option>
+                                        <option value="Dibatalkan">Dibatalkan</option>
+                                    </select>
+                                </div>
+                                <div>
+                                    <label class="block text-[11px] font-semibold text-slate-500 mb-1">Cari Peminjam/Kegiatan</label>
+                                    <div class="flex gap-1.5">
+                                        <input type="text" id="dash-filter-search" oninput="updateDashboardAnalytics()" placeholder="Kata kunci..." class="w-full px-3 py-2 rounded-xl border border-slate-200 dark:border-slate-600 bg-slate-50 dark:bg-slate-700 text-xs">
+                                        <button onclick="resetDashboardFilters()" title="Reset Filter" class="px-2.5 py-2 rounded-xl bg-slate-200 dark:bg-slate-600 text-xs hover:bg-slate-300"><i class="fa-solid fa-xmark"></i></button>
+                                    </div>
+                                </div>
+                            </div>
+
+                            <!-- 6 Kartu KPI -->
+                            <div class="grid grid-cols-2 sm:grid-cols-3 lg:grid-cols-6 gap-3 sm:gap-4">
+                                <div class="bg-white dark:bg-slate-800 p-4 rounded-2xl border border-slate-200 dark:border-slate-700 shadow-sm">
+                                    <div class="flex items-center justify-between text-slate-400 mb-2">
+                                        <span class="text-xs font-medium">Total Pengajuan</span>
+                                        <i class="fa-solid fa-folder-open text-primary-600"></i>
+                                    </div>
+                                    <p id="kpi-total" class="font-heading text-2xl font-extrabold text-slate-900 dark:text-white">0</p>
+                                </div>
+                                <div class="bg-white dark:bg-slate-800 p-4 rounded-2xl border border-slate-200 dark:border-slate-700 shadow-sm">
+                                    <div class="flex items-center justify-between text-slate-400 mb-2">
+                                        <span class="text-xs font-medium">Menunggu</span>
+                                        <i class="fa-solid fa-hourglass-half text-amber-500"></i>
+                                    </div>
+                                    <p id="kpi-menunggu" class="font-heading text-2xl font-extrabold text-amber-600">0</p>
+                                </div>
+                                <div class="bg-white dark:bg-slate-800 p-4 rounded-2xl border border-slate-200 dark:border-slate-700 shadow-sm">
+                                    <div class="flex items-center justify-between text-slate-400 mb-2">
+                                        <span class="text-xs font-medium">Disetujui</span>
+                                        <i class="fa-solid fa-circle-check text-emerald-500"></i>
+                                    </div>
+                                    <p id="kpi-disetujui" class="font-heading text-2xl font-extrabold text-emerald-600">0</p>
+                                </div>
+                                <div class="bg-white dark:bg-slate-800 p-4 rounded-2xl border border-slate-200 dark:border-slate-700 shadow-sm">
+                                    <div class="flex items-center justify-between text-slate-400 mb-2">
+                                        <span class="text-xs font-medium">Ditolak</span>
+                                        <i class="fa-solid fa-circle-xmark text-red-500"></i>
+                                    </div>
+                                    <p id="kpi-ditolak" class="font-heading text-2xl font-extrabold text-red-600">0</p>
+                                </div>
+                                <div class="bg-white dark:bg-slate-800 p-4 rounded-2xl border border-slate-200 dark:border-slate-700 shadow-sm">
+                                    <div class="flex items-center justify-between text-slate-400 mb-2">
+                                        <span class="text-xs font-medium">Jadwal Hari Ini</span>
+                                        <i class="fa-solid fa-calendar-day text-blue-500"></i>
+                                    </div>
+                                    <p id="kpi-hari-ini" class="font-heading text-2xl font-extrabold text-blue-600">0</p>
+                                </div>
+                                <div class="bg-white dark:bg-slate-800 p-4 rounded-2xl border border-slate-200 dark:border-slate-700 shadow-sm">
+                                    <div class="flex items-center justify-between text-slate-400 mb-2">
+                                        <span class="text-xs font-medium">Okupansi Hari Ini</span>
+                                        <i class="fa-solid fa-chart-line text-purple-500"></i>
+                                    </div>
+                                    <p id="kpi-okupansi" class="font-heading text-2xl font-extrabold text-purple-600">0%</p>
+                                </div>
+                            </div>
+
+                            <!-- Grid Grafik (5 Visualisasi Data Nyata) -->
+                            <div class="grid grid-cols-1 lg:grid-cols-3 gap-5">
+                                <!-- Tren Peminjaman -->
+                                <div class="lg:col-span-2 bg-white dark:bg-slate-800 p-5 rounded-2xl border border-slate-200 dark:border-slate-700 shadow-sm">
+                                    <h3 class="font-heading font-bold text-sm text-slate-800 dark:text-white mb-4">Tren Peminjaman Ruangan (Per Tanggal)</h3>
+                                    <div class="h-64"><canvas id="chart-trend"></canvas></div>
+                                </div>
+                                <!-- Komposisi Status -->
+                                <div class="bg-white dark:bg-slate-800 p-5 rounded-2xl border border-slate-200 dark:border-slate-700 shadow-sm">
+                                    <h3 class="font-heading font-bold text-sm text-slate-800 dark:text-white mb-4">Komposisi Status Pengajuan</h3>
+                                    <div class="h-64 flex items-center justify-center"><canvas id="chart-status"></canvas></div>
+                                </div>
+                            </div>
+
+                            <div class="grid grid-cols-1 lg:grid-cols-3 gap-5">
+                                <!-- Penggunaan Per Ruangan -->
+                                <div class="bg-white dark:bg-slate-800 p-5 rounded-2xl border border-slate-200 dark:border-slate-700 shadow-sm">
+                                    <h3 class="font-heading font-bold text-sm text-slate-800 dark:text-white mb-4">Penggunaan per Ruangan</h3>
+                                    <div class="h-60"><canvas id="chart-room"></canvas></div>
+                                </div>
+                                <!-- Jam Sibuk -->
+                                <div class="bg-white dark:bg-slate-800 p-5 rounded-2xl border border-slate-200 dark:border-slate-700 shadow-sm">
+                                    <h3 class="font-heading font-bold text-sm text-slate-800 dark:text-white mb-4">Distribusi Jam Sibuk (WIB)</h3>
+                                    <div class="h-60"><canvas id="chart-hour"></canvas></div>
+                                </div>
+                                <!-- Status Peminjam -->
+                                <div class="bg-white dark:bg-slate-800 p-5 rounded-2xl border border-slate-200 dark:border-slate-700 shadow-sm">
+                                    <h3 class="font-heading font-bold text-sm text-slate-800 dark:text-white mb-4">Kategori Peminjam</h3>
+                                    <div class="h-60"><canvas id="chart-role"></canvas></div>
+                                </div>
+                            </div>
+
+                            <!-- 3 Widget Operasional -->
+                            <div class="grid grid-cols-1 lg:grid-cols-3 gap-5">
+                                <!-- Widget 1: Antrean Menunggu Verifikasi -->
+                                <div class="bg-white dark:bg-slate-800 p-5 rounded-2xl border border-slate-200 dark:border-slate-700 shadow-sm">
+                                    <div class="flex items-center justify-between mb-3">
+                                        <h3 class="font-heading font-bold text-sm text-slate-800 dark:text-white">Antrean Menunggu Verifikasi</h3>
+                                        <button onclick="switchSarprasMenu('pengajuan')" class="text-xs text-primary-600 font-semibold hover:underline">Lihat Semua</button>
+                                    </div>
+                                    <div id="widget-pending-list" class="space-y-2.5 text-xs"></div>
+                                </div>
+
+                                <!-- Widget 2: Jadwal Hari Ini -->
+                                <div class="bg-white dark:bg-slate-800 p-5 rounded-2xl border border-slate-200 dark:border-slate-700 shadow-sm">
+                                    <h3 class="font-heading font-bold text-sm text-slate-800 dark:text-white mb-3">Jadwal Aktif Hari Ini</h3>
+                                    <div id="widget-today-list" class="space-y-2.5 text-xs"></div>
+                                </div>
+
+                                <!-- Widget 3: Top 5 Ruangan Terfavorit -->
+                                <div class="bg-white dark:bg-slate-800 p-5 rounded-2xl border border-slate-200 dark:border-slate-700 shadow-sm">
+                                    <h3 class="font-heading font-bold text-sm text-slate-800 dark:text-white mb-3">Top 5 Ruangan Paling Sering Dipakai</h3>
+                                    <div id="widget-top-rooms" class="space-y-3 text-xs"></div>
+                                </div>
+                            </div>
+                        </div>
+
+                        <!-- SUB-HALAMAN B: MANAJEMEN PENGAJUAN -->
+                        <div id="sarpras-sec-pengajuan" class="hidden space-y-5 fade-in">
+                            <div class="bg-white dark:bg-slate-800 p-6 rounded-2xl border border-slate-200 dark:border-slate-700 shadow-sm">
+                                <div class="flex flex-col sm:flex-row sm:items-center justify-between gap-4 mb-5">
+                                    <div>
+                                        <h2 class="font-heading text-xl font-bold text-slate-900 dark:text-white">Manajemen Pengajuan Peminjaman</h2>
+                                        <p class="text-xs text-slate-500">Verifikasi, setujui, tolak, atau perbarui status peminjaman ruangan.</p>
+                                    </div>
+                                    <div class="flex flex-wrap gap-2">
+                                        <input type="text" id="mgmt-search" oninput="mgmtPage=1; renderManagementTable();" placeholder="Cari ID, Nama, Ruangan..." class="px-3.5 py-2 rounded-xl border border-slate-300 dark:border-slate-600 bg-slate-50 dark:bg-slate-700 text-xs outline-none">
+                                        <select id="mgmt-status-filter" onchange="mgmtPage=1; renderManagementTable();" class="px-3.5 py-2 rounded-xl border border-slate-300 dark:border-slate-600 bg-slate-50 dark:bg-slate-700 text-xs outline-none">
+                                            <option value="ALL">Semua Status</option>
+                                            <option value="Menunggu">Menunggu</option>
+                                            <option value="Disetujui">Disetujui</option>
+                                            <option value="Ditolak">Ditolak</option>
+                                            <option value="Selesai">Selesai</option>
+                                            <option value="Dibatalkan">Dibatalkan</option>
+                                        </select>
+                                    </div>
+                                </div>
+
+                                <!-- Tabel Pengajuan -->
+                                <div class="overflow-x-auto">
+                                    <table class="w-full text-left border-collapse min-w-[850px]">
+                                        <thead>
+                                            <tr class="border-b border-slate-200 dark:border-slate-700 text-[11px] font-bold uppercase text-slate-500">
+                                                <th class="py-3 px-3 cursor-pointer hover:text-primary-600" onclick="sortManagement('id')">ID <i class="fa-solid fa-sort ml-1"></i></th>
+                                                <th class="py-3 px-3 cursor-pointer hover:text-primary-600" onclick="sortManagement('nama')">Peminjam <i class="fa-solid fa-sort ml-1"></i></th>
+                                                <th class="py-3 px-3 cursor-pointer hover:text-primary-600" onclick="sortManagement('ruangan')">Ruangan <i class="fa-solid fa-sort ml-1"></i></th>
+                                                <th class="py-3 px-3 cursor-pointer hover:text-primary-600" onclick="sortManagement('tanggal')">Jadwal <i class="fa-solid fa-sort ml-1"></i></th>
+                                                <th class="py-3 px-3">Status</th>
+                                                <th class="py-3 px-3 text-right">Aksi Verifikasi</th>
+                                            </tr>
+                                        </thead>
+                                        <tbody id="mgmt-tbody" class="divide-y divide-slate-100 dark:divide-slate-700 text-xs">
+                                            <!-- Diisi dinamis -->
+                                        </tbody>
+                                    </table>
+                                </div>
+
+                                <!-- Pagination -->
+                                <div class="flex flex-col sm:flex-row items-center justify-between gap-3 mt-4 pt-4 border-t border-slate-100 dark:border-slate-700 text-xs text-slate-500">
+                                    <span id="mgmt-pagination-info">Menampilkan 0 data</span>
+                                    <div class="flex gap-1.5" id="mgmt-pagination-controls"></div>
+                                </div>
+                            </div>
+                        </div>
+
+                        <!-- SUB-HALAMAN C: LAPORAN & EKSPOR -->
+                        <div id="sarpras-sec-laporan" class="hidden space-y-5 fade-in">
+                            <div class="bg-white dark:bg-slate-800 p-6 rounded-2xl border border-slate-200 dark:border-slate-700 shadow-sm">
+                                <div class="flex flex-col md:flex-row md:items-center justify-between gap-4 mb-6">
+                                    <div>
+                                        <h2 class="font-heading text-xl font-bold text-slate-900 dark:text-white">Laporan Peminjaman Ruangan</h2>
+                                        <p class="text-xs text-slate-500">Ekspor rekapitulasi data ke format Excel (.xlsx), PDF resmi bertanda tangan, atau cetak langsung.</p>
+                                    </div>
+                                    <div class="flex flex-wrap gap-2">
+                                        <button onclick="exportToExcel()" class="px-3.5 py-2 rounded-xl bg-emerald-600 hover:bg-emerald-700 text-white text-xs font-semibold flex items-center gap-1.5 shadow-sm">
+                                            <i class="fa-solid fa-file-excel"></i> Ekspor Excel
+                                        </button>
+                                        <button onclick="exportToPDF()" class="px-3.5 py-2 rounded-xl bg-red-600 hover:bg-red-700 text-white text-xs font-semibold flex items-center gap-1.5 shadow-sm">
+                                            <i class="fa-solid fa-file-pdf"></i> Ekspor PDF
+                                        </button>
+                                        <button onclick="window.print()" class="px-3.5 py-2 rounded-xl bg-slate-700 hover:bg-slate-800 text-white text-xs font-semibold flex items-center gap-1.5 shadow-sm">
+                                            <i class="fa-solid fa-print"></i> Cetak
+                                        </button>
+                                        <button onclick="openSpreadsheetLink()" class="px-3.5 py-2 rounded-xl bg-primary-900 hover:bg-primary-800 text-white text-xs font-semibold flex items-center gap-1.5 shadow-sm">
+                                            <i class="fa-solid fa-table"></i> Buka Spreadsheet
+                                        </button>
+                                    </div>
+                                </div>
+
+                                <!-- Filter Periode Laporan -->
+                                <div class="grid grid-cols-1 sm:grid-cols-4 gap-3 mb-6 bg-slate-50 dark:bg-slate-900/50 p-4 rounded-xl">
+                                    <div>
+                                        <label class="block text-[11px] font-semibold text-slate-500 mb-1">Preset Periode</label>
+                                        <select id="rep-preset" onchange="applyReportPreset()" class="w-full px-3 py-2 rounded-xl border border-slate-300 dark:border-slate-600 bg-white dark:bg-slate-700 text-xs">
+                                            <option value="all">Semua Waktu</option>
+                                            <option value="today">Hari Ini</option>
+                                            <option value="week">7 Hari Terakhir</option>
+                                            <option value="month">Bulan Ini</option>
+                                        </select>
+                                    </div>
+                                    <div>
+                                        <label class="block text-[11px] font-semibold text-slate-500 mb-1">Tanggal Mulai</label>
+                                        <input type="date" id="rep-start" onchange="renderReportPreview()" class="w-full px-3 py-2 rounded-xl border border-slate-300 dark:border-slate-600 bg-white dark:bg-slate-700 text-xs">
+                                    </div>
+                                    <div>
+                                        <label class="block text-[11px] font-semibold text-slate-500 mb-1">Tanggal Akhir</label>
+                                        <input type="date" id="rep-end" onchange="renderReportPreview()" class="w-full px-3 py-2 rounded-xl border border-slate-300 dark:border-slate-600 bg-white dark:bg-slate-700 text-xs">
+                                    </div>
+                                    <div>
+                                        <label class="block text-[11px] font-semibold text-slate-500 mb-1">Filter Status</label>
+                                        <select id="rep-status" onchange="renderReportPreview()" class="w-full px-3 py-2 rounded-xl border border-slate-300 dark:border-slate-600 bg-white dark:bg-slate-700 text-xs">
+                                            <option value="ALL">Semua Status</option>
+                                            <option value="Disetujui">Disetujui</option>
+                                            <option value="Selesai">Selesai</option>
+                                            <option value="Menunggu">Menunggu</option>
+                                            <option value="Ditolak">Ditolak</option>
+                                            <option value="Dibatalkan">Dibatalkan</option>
+                                        </select>
+                                    </div>
+                                </div>
+
+                                <!-- Area Pratinjau & Cetak Laporan -->
+                                <div id="print-area" class="border border-slate-200 dark:border-slate-700 rounded-xl p-5">
+                                    <div class="text-center border-b-2 border-slate-800 pb-4 mb-4">
+                                        <h3 class="font-heading font-extrabold text-lg uppercase tracking-wide">SWINS – BAGIAN SARANA & PRASARANA</h3>
+                                        <p class="text-xs text-slate-600 dark:text-slate-400">Laporan Rekapitulasi Peminjaman Ruangan Kelas & Laboratorium</p>
+                                        <p id="rep-period-label" class="text-xs font-semibold mt-1">Periode: Semua Waktu</p>
+                                    </div>
+
+                                    <div class="overflow-x-auto">
+                                        <table class="w-full text-left border-collapse text-xs">
+                                            <thead>
+                                                <tr class="bg-slate-100 dark:bg-slate-700 border-y border-slate-300 dark:border-slate-600">
+                                                    <th class="py-2 px-2">No</th>
+                                                    <th class="py-2 px-2">ID</th>
+                                                    <th class="py-2 px-2">Tanggal & Jam</th>
+                                                    <th class="py-2 px-2">Ruangan</th>
+                                                    <th class="py-2 px-2">Peminjam (Unit)</th>
+                                                    <th class="py-2 px-2">Keperluan</th>
+                                                    <th class="py-2 px-2">Status</th>
+                                                </tr>
+                                            </thead>
+                                            <tbody id="rep-tbody" class="divide-y divide-slate-200 dark:divide-slate-700"></tbody>
+                                        </table>
+                                    </div>
+                                </div>
+                            </div>
+                        </div>
+
+                        <!-- SUB-HALAMAN D: MASTER RUANGAN -->
+                        <div id="sarpras-sec-ruangan" class="hidden space-y-5 fade-in">
+                            <div class="bg-white dark:bg-slate-800 p-6 rounded-2xl border border-slate-200 dark:border-slate-700 shadow-sm">
+                                <div class="flex flex-col sm:flex-row sm:items-center justify-between gap-4 mb-6">
+                                    <div>
+                                        <h2 class="font-heading text-xl font-bold text-slate-900 dark:text-white">Master Data Ruangan</h2>
+                                        <p class="text-xs text-slate-500">Kelola daftar ruangan, kapasitas maksimal, fasilitas bawaan, dan status aktif.</p>
+                                    </div>
+                                    <button onclick="openRoomModal()" class="px-4 py-2.5 rounded-xl bg-primary-900 hover:bg-primary-800 text-white text-xs font-bold flex items-center gap-2 self-start">
+                                        <i class="fa-solid fa-plus"></i> Tambah Ruangan Baru
+                                    </button>
+                                </div>
+
+                                <div class="overflow-x-auto">
+                                    <table class="w-full text-left border-collapse min-w-[700px] text-xs">
+                                        <thead>
+                                            <tr class="border-b border-slate-200 dark:border-slate-700 text-[11px] font-bold uppercase text-slate-500">
+                                                <th class="py-3 px-3">Kode</th>
+                                                <th class="py-3 px-3">Nama Ruangan</th>
+                                                <th class="py-3 px-3">Gedung/Lantai</th>
+                                                <th class="py-3 px-3">Kapasitas</th>
+                                                <th class="py-3 px-3">Fasilitas Bawaan</th>
+                                                <th class="py-3 px-3">Status</th>
+                                                <th class="py-3 px-3 text-right">Aksi</th>
+                                            </tr>
+                                        </thead>
+                                        <tbody id="master-room-tbody" class="divide-y divide-slate-100 dark:divide-slate-700"></tbody>
+                                    </table>
+                                </div>
+                            </div>
+                        </div>
+
+                    </div>
+                </div>
+            </div>
+        </div>
+    </main>
+
+    <!-- FOOTER -->
+    <footer class="bg-white dark:bg-slate-800 border-t border-slate-200 dark:border-slate-700 py-6 px-4 mt-12 no-print">
+        <div class="max-w-7xl mx-auto flex flex-col sm:flex-row items-center justify-between gap-3 text-xs text-slate-500 dark:text-slate-400">
+            <p>&copy; 2026 <strong>SWINS – Bagian Sarana & Prasarana</strong>. Hak Cipta Dilindungi.</p>
+            <p>Zona Waktu: Waktu Indonesia Barat (WIB)</p>
+        </div>
+    </footer>
+
+    <!-- ==================== MODAL & OVERLAY ==================== -->
+
+    <!-- 1. Modal Sukses Submit Peminjaman -->
+    <div id="modal-success" class="hidden fixed inset-0 z-50 bg-slate-900/60 backdrop-blur-sm flex items-center justify-center p-4">
+        <div class="bg-white dark:bg-slate-800 rounded-2xl max-w-md w-full p-6 shadow-2xl border border-slate-200 dark:border-slate-700 fade-in text-center">
+            <div class="w-16 h-16 rounded-full bg-emerald-100 text-emerald-600 flex items-center justify-center text-3xl mx-auto mb-4">
+                <i class="fa-solid fa-circle-check"></i>
+            </div>
+            <h3 class="font-heading text-xl font-bold text-slate-900 dark:text-white mb-1">Pengajuan Berhasil Dikirim!</h3>
+            <p class="text-xs text-slate-500 dark:text-slate-400 mb-4">Simpan ID Peminjaman di bawah ini untuk mengecek status verifikasi dari Bagian Sarpras.</p>
+
+            <div class="bg-slate-100 dark:bg-slate-900 p-3.5 rounded-xl border border-dashed border-primary-600 mb-4 flex items-center justify-between">
+                <span id="success-booking-id" class="font-mono font-extrabold text-lg text-primary-900 dark:text-blue-400">PJM-20261123-001</span>
+                <button onclick="copyBookingId()" class="px-3 py-1.5 rounded-lg bg-primary-900 hover:bg-primary-800 text-white text-xs font-semibold flex items-center gap-1.5">
+                    <i class="fa-regular fa-copy"></i> Salin ID
+                </button>
+            </div>
+
+            <div id="success-summary" class="text-left bg-slate-50 dark:bg-slate-700/40 rounded-xl p-3.5 text-xs space-y-1.5 mb-5 text-slate-600 dark:text-slate-300"></div>
+
+            <button onclick="closeModal('modal-success')" class="w-full py-2.5 rounded-xl bg-slate-900 dark:bg-slate-700 text-white font-semibold text-sm hover:opacity-90">
+                Selesai & Tutup
+            </button>
+        </div>
+    </div>
+
+    <!-- 2. Modal Login PIN Sarpras -->
+    <div id="modal-pin" class="hidden fixed inset-0 z-50 bg-slate-900/60 backdrop-blur-sm flex items-center justify-center p-4">
+        <div class="bg-white dark:bg-slate-800 rounded-2xl max-w-sm w-full p-6 shadow-2xl border border-slate-200 dark:border-slate-700 fade-in">
+            <div class="flex items-center justify-between mb-4">
+                <h3 class="font-heading text-lg font-bold text-slate-900 dark:text-white flex items-center gap-2">
+                    <i class="fa-solid fa-lock text-primary-600"></i> Verifikasi Akses Sarpras
+                </h3>
+                <button onclick="closeModal('modal-pin')" class="text-slate-400 hover:text-slate-600"><i class="fa-solid fa-xmark text-lg"></i></button>
+            </div>
+            <p class="text-xs text-slate-500 dark:text-slate-400 mb-4">Masukkan PIN Keamanan Bagian Sarpras SWINS untuk mengelola peminjaman.</p>
+            
+            <form onsubmit="handlePinLogin(event)" class="space-y-4">
+                <div>
+                    <label class="block text-xs font-semibold text-slate-600 dark:text-slate-300 mb-1">Nama Petugas Verifikator</label>
+                    <input type="text" id="input-verifier-name" required value="Admin Sarpras SWINS" class="w-full px-3.5 py-2.5 rounded-xl border border-slate-300 dark:border-slate-600 bg-white dark:bg-slate-700 text-sm outline-none">
+                </div>
+                <div>
+                    <label class="block text-xs font-semibold text-slate-600 dark:text-slate-300 mb-1">PIN Akses</label>
+                    <input type="password" id="input-sarpras-pin" required placeholder="••••••" class="w-full px-3.5 py-2.5 rounded-xl border border-slate-300 dark:border-slate-600 bg-white dark:bg-slate-700 text-center tracking-widest font-bold text-base outline-none">
+                </div>
+                <p id="pin-error-msg" class="hidden text-xs text-red-600 font-medium"></p>
+                <button type="submit" id="btn-verify-pin" class="w-full py-2.5 rounded-xl bg-primary-900 hover:bg-primary-800 text-white font-bold text-sm">
+                    Masuk ke Dashboard
+                </button>
+            </form>
+        </div>
+    </div>
+
+    <!-- 3. Modal Detail & Verifikasi Pengajuan (Sarpras) -->
+    <div id="modal-detail" class="hidden fixed inset-0 z-50 bg-slate-900/60 backdrop-blur-sm flex items-center justify-center p-4">
+        <div class="bg-white dark:bg-slate-800 rounded-2xl max-w-xl w-full p-6 shadow-2xl border border-slate-200 dark:border-slate-700 fade-in max-h-[90vh] overflow-y-auto">
+            <div class="flex items-center justify-between border-b border-slate-200 dark:border-slate-700 pb-3 mb-4">
+                <div>
+                    <span id="detail-id" class="font-mono text-xs font-bold text-primary-600">PJM-XXX</span>
+                    <h3 class="font-heading text-lg font-bold text-slate-900 dark:text-white">Detail Pengajuan Ruangan</h3>
+                </div>
+                <button onclick="closeModal('modal-detail')" class="text-slate-400 hover:text-slate-600"><i class="fa-solid fa-xmark text-lg"></i></button>
+            </div>
+
+            <div id="detail-content" class="space-y-3 text-xs sm:text-sm mb-5"></div>
+
+            <!-- Form Catatan & Aksi Sarpras -->
+            <div class="bg-slate-50 dark:bg-slate-900/60 p-4 rounded-xl border border-slate-200 dark:border-slate-700 space-y-3">
+                <label class="block text-xs font-bold text-slate-700 dark:text-slate-300">Catatan Sarpras (Wajib diisi jika menolak)</label>
+                <textarea id="detail-catatan" rows="2" placeholder="Tulis alasan penolakan atau instruksi pengambilan kunci..." class="w-full px-3 py-2 rounded-xl border border-slate-300 dark:border-slate-600 bg-white dark:bg-slate-700 text-xs outline-none"></textarea>
+                
+                <div class="flex flex-wrap gap-2 pt-1">
+                    <button onclick="processBookingAction('Disetujui')" class="flex-1 py-2 px-3 rounded-xl bg-emerald-600 hover:bg-emerald-700 text-white text-xs font-bold flex items-center justify-center gap-1.5">
+                        <i class="fa-solid fa-check"></i> Setujui
+                    </button>
+                    <button onclick="processBookingAction('Ditolak')" class="flex-1 py-2 px-3 rounded-xl bg-red-600 hover:bg-red-700 text-white text-xs font-bold flex items-center justify-center gap-1.5">
+                        <i class="fa-solid fa-xmark"></i> Tolak
+                    </button>
+                    <button onclick="processBookingAction('Selesai')" class="py-2 px-3 rounded-xl bg-blue-600 hover:bg-blue-700 text-white text-xs font-bold">
+                        Tandai Selesai
+                    </button>
+                    <button onclick="processBookingAction('Dibatalkan')" class="py-2 px-3 rounded-xl bg-slate-600 hover:bg-slate-700 text-white text-xs font-bold">
+                        Batalkan
+                    </button>
+                </div>
+            </div>
+        </div>
+    </div>
+
+    <!-- 4. Modal Tambah/Edit Master Ruangan -->
+    <div id="modal-room" class="hidden fixed inset-0 z-50 bg-slate-900/60 backdrop-blur-sm flex items-center justify-center p-4">
+        <div class="bg-white dark:bg-slate-800 rounded-2xl max-w-md w-full p-6 shadow-2xl border border-slate-200 dark:border-slate-700 fade-in">
+            <div class="flex items-center justify-between mb-4">
+                <h3 id="modal-room-title" class="font-heading text-lg font-bold text-slate-900 dark:text-white">Tambah Ruangan Baru</h3>
+                <button onclick="closeModal('modal-room')" class="text-slate-400 hover:text-slate-600"><i class="fa-solid fa-xmark text-lg"></i></button>
+            </div>
+            <form onsubmit="handleSaveRoom(event)" class="space-y-3.5 text-xs">
+                <input type="hidden" id="room-edit-mode" value="add">
+                <div>
+                    <label class="block font-semibold mb-1">Kode Ruangan <span class="text-red-500">*</span></label>
+                    <input type="text" id="room-kode" required placeholder="Contoh: R-LAB1" class="w-full px-3.5 py-2 rounded-xl border border-slate-300 dark:border-slate-600 bg-white dark:bg-slate-700 outline-none">
+                </div>
+                <div>
+                    <label class="block font-semibold mb-1">Nama Ruangan <span class="text-red-500">*</span></label>
+                    <input type="text" id="room-nama" required placeholder="Contoh: Ruang Lab Komputer 1" class="w-full px-3.5 py-2 rounded-xl border border-slate-300 dark:border-slate-600 bg-white dark:bg-slate-700 outline-none">
+                </div>
+                <div class="grid grid-cols-2 gap-3">
+                    <div>
+                        <label class="block font-semibold mb-1">Gedung / Lantai <span class="text-red-500">*</span></label>
+                        <input type="text" id="room-gedung" required placeholder="Gedung Utama Lt. 2" class="w-full px-3.5 py-2 rounded-xl border border-slate-300 dark:border-slate-600 bg-white dark:bg-slate-700 outline-none">
+                    </div>
+                    <div>
+                        <label class="block font-semibold mb-1">Kapasitas (Orang) <span class="text-red-500">*</span></label>
+                        <input type="number" id="room-kapasitas" required min="1" placeholder="20" class="w-full px-3.5 py-2 rounded-xl border border-slate-300 dark:border-slate-600 bg-white dark:bg-slate-700 outline-none">
+                    </div>
+                </div>
+                <div>
+                    <label class="block font-semibold mb-1">Fasilitas Bawaan <span class="text-red-500">*</span></label>
+                    <input type="text" id="room-fasilitas" required placeholder="20 PC, Proyektor, AC, Whiteboard" class="w-full px-3.5 py-2 rounded-xl border border-slate-300 dark:border-slate-600 bg-white dark:bg-slate-700 outline-none">
+                </div>
+                <div>
+                    <label class="block font-semibold mb-1">Status Aktif</label>
+                    <select id="room-status" class="w-full px-3.5 py-2 rounded-xl border border-slate-300 dark:border-slate-600 bg-white dark:bg-slate-700 outline-none">
+                        <option value="Aktif">Aktif</option>
+                        <option value="Nonaktif">Nonaktif</option>
+                    </select>
+                </div>
+                <div class="pt-2 flex gap-2">
+                    <button type="button" onclick="closeModal('modal-room')" class="flex-1 py-2.5 rounded-xl bg-slate-200 dark:bg-slate-700 font-semibold">Batal</button>
+                    <button type="submit" id="btn-save-room" class="flex-1 py-2.5 rounded-xl bg-primary-900 text-white font-bold">Simpan Ruangan</button>
+                </div>
+            </form>
+        </div>
+    </div>
+
+    <!-- Toast Notification Container -->
+    <div id="toast-container" class="fixed bottom-5 right-5 z-50 flex flex-col gap-2 max-w-sm w-full pointer-events-none px-4 sm:px-0"></div>
+
+    <!-- ==================== LOGIKA JAVASCRIPT ==================== -->
+    <script>
+        // ============================================================
+        // 1. STATE & DATA DEMO REALISTIS
+        // ============================================================
+        const IS_DEMO_MODE = !API_URL || API_URL === "ISI_URL_APPS_SCRIPT_DI_SINI" || API_URL.trim() === "";
+        
+        let appState = {
+            rooms: [],
+            bookings: [],
+            settings: {
+                JAM_MULAI_OPS: "08:00",
+                JAM_SELESAI_OPS: "16:00",
+                MAX_DURASI_JAM: 4,
+                SPREADSHEET_URL: "https://docs.google.com/spreadsheets"
+            },
+            sarprasAuth: {
+                isAuthenticated: false,
+                verifierName: "Admin Sarpras SWINS",
+                pinToken: ""
+            },
+            selectedBookingId: null
+        };
+
+        // Pagination & Sorting state untuk Manajemen Pengajuan
+        let mgmtPage = 1;
+        const mgmtPerPage = 8;
+        let mgmtSortField = 'timestamp';
+        let mgmtSortAsc = false;
+
+        // Instance Chart.js
+        let charts = {};
+
+        // Data Contoh Realistis untuk Mode Demo (Menggunakan Tanggal Hari Ini & Sekitarnya)
+        function initDemoData() {
+            const todayStr = getTodayWIB();
+            const tomorrowStr = addDaysStr(todayStr, 1);
+            const yesterdayStr = addDaysStr(todayStr, -1);
+
+            appState.rooms = [
+                { kode: "R-LAB1", nama: "Ruang Lab Komputer 1", gedung: "Gedung A Lt. 2", kapasitas: 20, fasilitas: "20 PC, Proyektor, AC, Whiteboard", status: "Aktif" },
+                { kode: "R-LAB2", nama: "Ruang Lab Komputer 2", gedung: "Gedung A Lt. 2", kapasitas: 15, fasilitas: "15 PC, Proyektor, AC, Whiteboard", status: "Aktif" },
+                { kode: "R-POD", nama: "Ruang Podcast", gedung: "Gedung Media Lt. 1", kapasitas: 7, fasilitas: "Mic Podcast, Mixer Audio, Kamera, Lighting, AC", status: "Aktif" },
+                { kode: "R-PHOTO", nama: "Ruang Photographi", gedung: "Gedung Media Lt. 1", kapasitas: 4, fasilitas: "Studio Lighting, Backdrop, Kamera DSLR, AC", status: "Aktif" },
+                { kode: "R-SMART", nama: "Ruang Smartclassroom", gedung: "Gedung Utama Lt. 3", kapasitas: 60, fasilitas: "Interactive Flat Panel, Soundsystem, Mic Wireless, AC", status: "Aktif" },
+                { kode: "R-KELAS", nama: "Ruang Kelas", gedung: "Gedung Utama Lt. 1", kapasitas: 40, fasilitas: "Proyektor, Whiteboard, AC", status: "Aktif" }
+            ];
+
+            appState.bookings = [
+                {
+                    id: `PJM-${todayStr.replace(/-/g, '')}-001`,
+                    timestamp: `${yesterdayStr} 09:15:00`,
+                    nama: "Dr. Hendra Wijaya, M.T.",
+                    statusPeminjam: "Dosen",
+                    nim: "198504122010121002",
+                    prodi: "Teknik Informatika",
+                    wa: "081298765432",
+                    email: "hendra.wijaya@swins.ac.id",
+                    ruangan: "Ruang Lab Komputer 1",
+                    tanggal: todayStr,
+                    jamMulai: "08:00",
+                    jamSelesai: "11:00",
+                    keperluan: "Praktikum Pemrograman Web Lanjut",
+                    jumlahPeserta: 18,
+                    fasilitas: "Proyektor, AC, Whiteboard",
+                    status: "Disetujui",
+                    catatan: "Kunci lab dapat diambil di loket Sarpras 15 menit sebelum acara.",
+                    diverifikasiOleh: "Admin Sarpras SWINS",
+                    waktuVerifikasi: `${yesterdayStr} 10:05:00`
+                },
+                {
+                    id: `PJM-${todayStr.replace(/-/g, '')}-002`,
+                    timestamp: `${yesterdayStr} 13:20:00`,
+                    nama: "Alya Putri Rahmawati",
+                    statusPeminjam: "BEM/ UKM/ Organisasi",
+                    nim: "2023010045",
+                    prodi: "BEM SWINS",
+                    wa: "085712345678",
+                    email: "alya.bem@swins.ac.id",
+                    ruangan: "Ruang Smartclassroom",
+                    tanggal: todayStr,
+                    jamMulai: "13:00",
+                    jamSelesai: "16:00",
+                    keperluan: "Seminar Nasional Kepemimpinan Mahasiswa",
+                    jumlahPeserta: 55,
+                    fasilitas: "Proyektor, Soundsystem, Mic Wireless, AC",
+                    status: "Menunggu",
+                    catatan: "",
+                    diverifikasiOleh: "",
+                    waktuVerifikasi: ""
+                },
+                {
+                    id: `PJM-${todayStr.replace(/-/g, '')}-003`,
+                    timestamp: `${todayStr} 08:10:00`,
+                    nama: "Rizky Ramadhan",
+                    statusPeminjam: "Mahasiswa",
+                    nim: "2024020112",
+                    prodi: "Ilmu Komunikasi",
+                    wa: "082133445566",
+                    email: "rizky.kom@swins.ac.id",
+                    ruangan: "Ruang Podcast",
+                    tanggal: todayStr,
+                    jamMulai: "10:00",
+                    jamSelesai: "12:00",
+                    keperluan: "Produksi Konten Podcast Suara Kampus Eps. 12",
+                    jumlahPeserta: 5,
+                    fasilitas: "Mic Wireless, Kamera, Lighting, AC",
+                    status: "Disetujui",
+                    catatan: "Harap merapikan kembali posisi mic setelah selesai.",
+                    diverifikasiOleh: "Admin Sarpras SWINS",
+                    waktuVerifikasi: `${todayStr} 08:25:00`
+                },
+                {
+                    id: `PJM-${tomorrowStr.replace(/-/g, '')}-004`,
+                    timestamp: `${todayStr} 09:00:00`,
+                    nama: "Siti Nurhaliza, S.E., M.M.",
+                    statusPeminjam: "Struktural",
+                    nim: "199002152015042001",
+                    prodi: "Biro Akademik & Kemahasiswaan",
+                    wa: "081355667788",
+                    email: "siti.bak@swins.ac.id",
+                    ruangan: "Ruang Kelas",
+                    tanggal: tomorrowStr,
+                    jamMulai: "09:00",
+                    jamSelesai: "12:00",
+                    keperluan: "Sosialisasi Pengisian KRS Semester Genap",
+                    jumlahPeserta: 35,
+                    fasilitas: "Proyektor, Mic Wireless, AC",
+                    status: "Menunggu",
+                    catatan: "",
+                    diverifikasiOleh: "",
+                    waktuVerifikasi: ""
+                },
+                {
+                    id: `PJM-${yesterdayStr.replace(/-/g, '')}-005`,
+                    timestamp: `${addDaysStr(todayStr, -2)} 14:00:00`,
+                    nama: "Dimas Pratama",
+                    statusPeminjam: "Mahasiswa",
+                    nim: "2022010089",
+                    prodi: "Desain Komunikasi Visual",
+                    wa: "087899001122",
+                    email: "dimas.dkv@swins.ac.id",
+                    ruangan: "Ruang Photographi",
+                    tanggal: yesterdayStr,
+                    jamMulai: "13:00",
+                    jamSelesai: "15:00",
+                    keperluan: "Pemotretan Katalog Produk Tugas Akhir",
+                    jumlahPeserta: 4,
+                    fasilitas: "Kamera, Lighting, AC",
+                    status: "Selesai",
+                    catatan: "Selesai tepat waktu dan kondisi ruangan baik.",
+                    diverifikasiOleh: "Admin Sarpras SWINS",
+                    waktuVerifikasi: `${addDaysStr(todayStr, -2)} 15:10:00`
+                }
+            ];
+        }
+
+        // ============================================================
+        // 2. UTILITAS TANGGAL, SANITASI & UI
+        // ============================================================
+        function getTodayWIB() {
+            const now = new Date();
+            const utc = now.getTime() + (now.getTimezoneOffset() * 60000);
+            const wib = new Date(utc + (3600000 * 7));
+            return wib.toISOString().split('T')[0];
+        }
+
+        function addDaysStr(dateStr, days) {
+            const d = new Date(dateStr + 'T00:00:00');
+            d.setDate(d.getDate() + days);
+            return d.toISOString().split('T')[0];
+        }
+
+        function formatTanggalIndo(dateStr) {
+            if (!dateStr) return "-";
+            try {
+                const d = new Date(dateStr + 'T00:00:00');
+                return new Intl.DateTimeFormat('id-ID', {
+                    weekday: 'long', day: 'numeric', month: 'long', year: 'numeric'
+                }).format(d);
+            } catch (e) {
+                return dateStr;
+            }
+        }
+
+        // Sanitasi input mencegah XSS
+        function escapeHTML(str) {
+            if (str === null || str === undefined) return "";
+            return String(str)
+                .replace(/&/g, "&amp;")
+                .replace(/</g, "&lt;")
+                .replace(/>/g, "&gt;")
+                .replace(/"/g, "&quot;")
+                .replace(/'/g, "&#039;");
+        }
+
+        function getStatusBadge(status) {
+            const map = {
+                'Menunggu': 'bg-amber-100 text-amber-800 border-amber-200 dark:bg-amber-900/40 dark:text-amber-300 dark:border-amber-700',
+                'Disetujui': 'bg-emerald-100 text-emerald-800 border-emerald-200 dark:bg-emerald-900/40 dark:text-emerald-300 dark:border-emerald-700',
+                'Ditolak': 'bg-red-100 text-red-800 border-red-200 dark:bg-red-900/40 dark:text-red-300 dark:border-red-700',
+                'Selesai': 'bg-blue-100 text-blue-800 border-blue-200 dark:bg-blue-900/40 dark:text-blue-300 dark:border-blue-700',
+                'Dibatalkan': 'bg-slate-200 text-slate-700 border-slate-300 dark:bg-slate-700 dark:text-slate-300 dark:border-slate-600'
+            };
+            const cls = map[status] || map['Dibatalkan'];
+            return `<span class="inline-flex items-center px-2.5 py-0.5 rounded-full text-[11px] font-bold border ${cls}">${escapeHTML(status)}</span>`;
+        }
+
+        function showToast(message, type = 'info') {
+            const container = document.getElementById('toast-container');
+            const colors = {
+                success: 'bg-emerald-600 text-white',
+                error: 'bg-red-600 text-white',
+                warning: 'bg-amber-500 text-slate-950',
+                info: 'bg-primary-900 text-white'
+            };
+            const icons = {
+                success: 'fa-circle-check',
+                error: 'fa-circle-exclamation',
+                warning: 'fa-triangle-exclamation',
+                info: 'fa-circle-info'
+            };
+            const el = document.createElement('div');
+            el.className = `pointer-events-auto flex items-center gap-3 px-4 py-3 rounded-xl shadow-lg text-xs sm:text-sm font-medium fade-in ${colors[type] || colors.info}`;
+            el.innerHTML = `<i class="fa-solid ${icons[type] || icons.info}"></i><span class="flex-grow">${escapeHTML(message)}</span>`;
+            container.appendChild(el);
+            setTimeout(() => {
+                el.style.opacity = '0';
+                el.style.transition = 'opacity 0.3s';
+                setTimeout(() => el.remove(), 300);
+            }, 3800);
+        }
+
+        function openModal(id) { document.getElementById(id).classList.remove('hidden'); }
+        function closeModal(id) { document.getElementById(id).classList.add('hidden'); }
+
+        function toggleDarkMode() {
+            const html = document.documentElement;
+            const icon = document.getElementById('theme-icon');
+            if (html.classList.contains('dark')) {
+                html.classList.remove('dark');
+                icon.className = 'fa-solid fa-moon';
+            } else {
+                html.classList.add('dark');
+                icon.className = 'fa-solid fa-sun text-amber-400';
+            }
+            if (appState.sarprasAuth.isAuthenticated) {
+                updateDashboardAnalytics();
+            }
+        }
+
+        // ============================================================
+        // 3. KOMUNIKASI API (APPS SCRIPT & MODE DEMO)
+        // ============================================================
+        async function apiRequest(action, payload = {}) {
+            if (IS_DEMO_MODE) {
+                await new Promise(r => setTimeout(r, 350)); // Simulasi latency jaringan
+                return handleDemoBackend(action, payload);
+            }
+
+            try {
+                if (action === 'getAllData') {
+                    const res = await fetch(`${API_URL}?action=getAllData`);
+                    return await res.json();
+                } else {
+                    const res = await fetch(API_URL, {
+                        method: 'POST',
+                        headers: { 'Content-Type': 'text/plain;charset=utf-8' },
+                        body: JSON.stringify({ action, ...payload })
+                    });
+                    return await res.json();
+                }
+            } catch (err) {
+                console.error("API Error:", err);
+                throw new Error("Gagal terhubung ke server Google Spreadsheet. Periksa koneksi internet Anda.");
+            }
+        }
+
+        // Simulasi Backend Lengkap saat Mode Demo Aktif
+        function handleDemoBackend(action, payload) {
+            if (action === 'getAllData') {
+                return {
+                    status: 'success',
+                    data: {
+                        rooms: appState.rooms,
+                        bookings: appState.bookings,
+                        settings: appState.settings
+                    }
+                };
+            }
+            if (action === 'verifyPin') {
+                if (payload.pin === "123456") {
+                    return { status: 'success', message: 'PIN Valid' };
+                }
+                return { status: 'error', message: 'PIN salah! (Untuk Mode Demo gunakan: 123456)' };
+            }
+            if (action === 'createBooking') {
+                const datePrefix = payload.tanggal.replace(/-/g, '');
+                const seq = String(appState.bookings.length + 1).padStart(3, '0');
+                const newId = `PJM-${datePrefix}-${seq}`;
+                const nowStr = new Date().toLocaleString('sv-SE', { timeZone: 'Asia/Jakarta' });
+                const newRecord = {
+                    id: newId,
+                    timestamp: nowStr,
+                    ...payload,
+                    status: 'Menunggu',
+                    catatan: '',
+                    diverifikasiOleh: '',
+                    waktuVerifikasi: ''
+                };
+                appState.bookings.unshift(newRecord);
+                return { status: 'success', data: newRecord };
+            }
+            if (action === 'updateBookingStatus') {
+                const idx = appState.bookings.findIndex(b => b.id === payload.id);
+                if (idx === -1) return { status: 'error', message: 'Data peminjaman tidak ditemukan.' };
+                const nowStr = new Date().toLocaleString('sv-SE', { timeZone: 'Asia/Jakarta' });
+                appState.bookings[idx].status = payload.status;
+                appState.bookings[idx].catatan = payload.catatan || '';
+                appState.bookings[idx].diverifikasiOleh = payload.verifier || 'Admin Sarpras';
+                appState.bookings[idx].waktuVerifikasi = nowStr;
+                return { status: 'success', data: appState.bookings[idx] };
+            }
+            if (action === 'saveRoom') {
+                if (payload.mode === 'edit') {
+                    const idx = appState.rooms.findIndex(r => r.kode === payload.room.kode);
+                    if (idx !== -1) appState.rooms[idx] = payload.room;
+                } else {
+                    if (appState.rooms.some(r => r.kode === payload.room.kode)) {
+                        return { status: 'error', message: 'Kode ruangan sudah digunakan!' };
+                    }
+                    appState.rooms.push(payload.room);
+                }
+                return { status: 'success', data: payload.room };
+            }
+            return { status: 'error', message: 'Aksi tidak dikenal' };
+        }
+
+        async function refreshAllData() {
+            try {
+                const res = await apiRequest('getAllData');
+                if (res.status === 'success') {
+                    appState.rooms = res.data.rooms || [];
+                    appState.bookings = res.data.bookings || [];
+                    if (res.data.settings) {
+                        appState.settings = { ...appState.settings, ...res.data.settings };
+                    }
+                    renderRoomDropdowns();
+                    renderSidebarRooms();
+                    renderRoomTimeline();
+                    if (appState.sarprasAuth.isAuthenticated) {
+                        updateDashboardAnalytics();
+                        renderManagementTable();
+                        renderReportPreview();
+                        renderMasterRoomTable();
+                    }
+                }
+            } catch (e) {
+                showToast(e.message, 'error');
+            }
+        }
+
+        // ============================================================
+        // 4. NAVIGASI UTAMA & PORTAL PEMINJAM
+        // ============================================================
+        function switchMainView(view) {
+            const vPeminjam = document.getElementById('view-peminjam');
+            const vSarpras = document.getElementById('view-sarpras');
+            const btnP = document.getElementById('btn-role-peminjam');
+            const btnS = document.getElementById('btn-role-sarpras');
+
+            if (view === 'peminjam') {
+                vPeminjam.classList.remove('hidden');
+                vSarpras.classList.add('hidden');
+                btnP.className = "px-3 py-1.5 rounded-lg bg-white dark:bg-slate-600 text-primary-900 dark:text-white shadow-sm transition-all flex items-center gap-1.5";
+                btnS.className = "px-3 py-1.5 rounded-lg text-slate-600 dark:text-slate-300 hover:text-primary-900 dark:hover:text-white transition-all flex items-center gap-1.5";
+            } else {
+                vPeminjam.classList.add('hidden');
+                vSarpras.classList.remove('hidden');
+                btnS.className = "px-3 py-1.5 rounded-lg bg-white dark:bg-slate-600 text-primary-900 dark:text-white shadow-sm transition-all flex items-center gap-1.5";
+                btnP.className = "px-3 py-1.5 rounded-lg text-slate-600 dark:text-slate-300 hover:text-primary-900 dark:hover:text-white transition-all flex items-center gap-1.5";
+                updateDashboardAnalytics();
+                renderManagementTable();
+                renderReportPreview();
+                renderMasterRoomTable();
+            }
+        }
+
+        function switchPeminjamTab(tab) {
+            ['form', 'jadwal', 'status'].forEach(t => {
+                document.getElementById(`peminjam-tab-${t}`).classList.add('hidden');
+                document.getElementById(`tab-btn-${t}`).className = "px-4 py-2.5 rounded-xl font-semibold text-sm bg-white dark:bg-slate-800 text-slate-600 dark:text-slate-300 border border-slate-200 dark:border-slate-700 hover:bg-slate-50 transition-all flex items-center gap-2";
+            });
+            document.getElementById(`peminjam-tab-${tab}`).classList.remove('hidden');
+            document.getElementById(`tab-btn-${tab}`).className = "px-4 py-2.5 rounded-xl font-semibold text-sm bg-primary-900 text-white shadow-sm transition-all flex items-center gap-2";
+            
+            if (tab === 'jadwal') renderRoomTimeline();
+        }
+
+        function renderRoomDropdowns() {
+            const activeRooms = appState.rooms.filter(r => r.status === 'Aktif');
+            const selectForm = document.getElementById('input-ruangan');
+            const selectDash = document.getElementById('dash-filter-room');
+
+            selectForm.innerHTML = `<option value="">-- Pilih Ruangan Kelas / Lab --</option>` +
+                activeRooms.map(r => `<option value="${escapeHTML(r.nama)}" data-cap="${r.kapasitas}" data-fas="${escapeHTML(r.fasilitas)}">${escapeHTML(r.nama)} (Kapasitas ${r.kapasitas} orang)</option>`).join('');
+
+            selectDash.innerHTML = `<option value="ALL">Semua Ruangan</option>` +
+                appState.rooms.map(r => `<option value="${escapeHTML(r.nama)}">${escapeHTML(r.nama)}</option>`).join('');
+        }
+
+        function renderSidebarRooms() {
+            const container = document.getElementById('sidebar-room-list');
+            const activeRooms = appState.rooms.filter(r => r.status === 'Aktif');
+            container.innerHTML = activeRooms.map(r => `
+                <div class="p-3 rounded-xl bg-slate-50 dark:bg-slate-700/40 border border-slate-100 dark:border-slate-700">
+                    <div class="flex items-center justify-between mb-1">
+                        <span class="font-bold text-xs text-slate-800 dark:text-white">${escapeHTML(r.nama)}</span>
+                        <span class="px-2 py-0.5 rounded-md bg-primary-100 dark:bg-primary-900/50 text-primary-800 dark:text-blue-300 text-[10px] font-bold">
+                            <i class="fa-solid fa-users mr-1"></i>${r.kapasitas}
+                        </span>
+                    </div>
+                    <p class="text-[11px] text-slate-500 dark:text-slate-400 mb-1">${escapeHTML(r.gedung)}</p>
+                    <p class="text-[11px] text-slate-600 dark:text-slate-300 line-clamp-1"><i class="fa-solid fa-plug text-accent-500 mr-1"></i>${escapeHTML(r.fasilitas)}</p>
+                </div>
+            `).join('');
+        }
+
+        function onRoomSelectChange() {
+            const sel = document.getElementById('input-ruangan');
+            const opt = sel.options[sel.selectedIndex];
+            const hint = document.getElementById('room-info-hint');
+            if (opt && opt.value) {
+                const cap = opt.getAttribute('data-cap');
+                const fas = opt.getAttribute('data-fas');
+                hint.innerHTML = `<i class="fa-solid fa-circle-info mr-1"></i> Kapasitas Maks: <strong>${cap} Orang</strong> &bull; Fasilitas Bawaan: ${escapeHTML(fas)}`;
+                hint.classList.remove('hidden');
+                document.getElementById('input-peserta').max = cap;
+            } else {
+                hint.classList.add('hidden');
+            }
+        }
+
+        function toggleFasilitasLainnya() {
+            const chk = document.getElementById('chk-fasilitas-lainnya');
+            const inp = document.getElementById('input-fasilitas-lainnya');
+            if (chk.checked) {
+                inp.classList.remove('hidden');
+                inp.focus();
+            } else {
+                inp.classList.add('hidden');
+                inp.value = '';
+            }
+        }
+
+        // ============================================================
+        // 5. VALIDASI & DETEKSI BENTROK JADWAL
+        // ============================================================
+        function timeToMinutes(t) {
+            if (!t) return 0;
+            const [h, m] = t.split(':').map(Number);
+            return h * 60 + m;
+        }
+
+        function findScheduleConflicts(ruangan, tanggal, jamMulai, jamSelesai, excludeId = null) {
+            const startMin = timeToMinutes(jamMulai);
+            const endMin = timeToMinutes(jamSelesai);
+            return appState.bookings.filter(b => {
+                if (excludeId && b.id === excludeId) return false;
+                if (b.ruangan !== ruangan || b.tanggal !== tanggal) return false;
+                if (!['Disetujui', 'Menunggu'].includes(b.status)) return false;
+                const bStart = timeToMinutes(b.jamMulai);
+                const bEnd = timeToMinutes(b.jamSelesai);
+                return (startMin < bEnd && endMin > bStart);
+            });
+        }
+
+        function checkRealtimeConflict() {
+            const ruangan = document.getElementById('input-ruangan').value;
+            const tanggal = document.getElementById('input-tanggal').value;
+            const jamMulai = document.getElementById('input-jam-mulai').value;
+            const jamSelesai = document.getElementById('input-jam-selesai').value;
+            const box = document.getElementById('realtime-conflict-box');
+
+            if (!ruangan || !tanggal || !jamMulai || !jamSelesai) {
+                box.classList.add('hidden');
+                return;
+            }
+
+            if (timeToMinutes(jamSelesai) <= timeToMinutes(jamMulai)) {
+                box.className = "p-3.5 rounded-xl text-xs font-medium flex items-center gap-2.5 bg-red-50 text-red-700 border border-red-200";
+                box.innerHTML = `<i class="fa-solid fa-circle-xmark"></i> Jam selesai harus lebih akhir dari jam mulai.`;
+                box.classList.remove('hidden');
+                return;
+            }
+
+            const conflicts = findScheduleConflicts(ruangan, tanggal, jamMulai, jamSelesai);
+            if (conflicts.length > 0) {
+                const c = conflicts[0];
+                box.className = "p-3.5 rounded-xl text-xs font-medium flex items-center gap-2.5 bg-red-50 dark:bg-red-900/30 text-red-700 dark:text-red-300 border border-red-200 dark:border-red-800";
+                box.innerHTML = `<i class="fa-solid fa-triangle-exclamation text-base"></i> <span><strong>Jadwal Bentrok!</strong> Ruangan sudah dipesan pada ${c.jamMulai}–${c.jamSelesai} WIB (${escapeHTML(c.keperluan)} - Status: ${c.status}).</span>`;
+                box.classList.remove('hidden');
+            } else {
+                box.className = "p-3.5 rounded-xl text-xs font-medium flex items-center gap-2.5 bg-emerald-50 dark:bg-emerald-900/30 text-emerald-700 dark:text-emerald-300 border border-emerald-200 dark:border-emerald-800";
+                box.innerHTML = `<i class="fa-solid fa-circle-check text-base"></i> <span>Jadwal tersedia! Tidak ada bentrok pada waktu yang dipilih.</span>`;
+                box.classList.remove('hidden');
+            }
+        }
+
+        async function handleBookingSubmit(e) {
+            e.preventDefault();
+            const alertBox = document.getElementById('form-alert');
+            const alertText = document.getElementById('form-alert-text');
+            alertBox.classList.add('hidden');
+
+            const nama = document.getElementById('input-nama').value.trim();
+            const statusPeminjam = document.getElementById('input-status-peminjam').value;
+            const nim = document.getElementById('input-nim').value.trim();
+            const prodi = document.getElementById('input-prodi').value.trim();
+            const wa = document.getElementById('input-wa').value.trim();
+            const email = document.getElementById('input-email').value.trim();
+            const ruangan = document.getElementById('input-ruangan').value;
+            const jumlahPeserta = parseInt(document.getElementById('input-peserta').value, 10);
+            const tanggal = document.getElementById('input-tanggal').value;
+            const jamMulai = document.getElementById('input-jam-mulai').value;
+            const jamSelesai = document.getElementById('input-jam-selesai').value;
+            const keperluan = document.getElementById('input-keperluan').value.trim();
+
+            // Kumpulkan fasilitas
+            const checkedFas = Array.from(document.querySelectorAll('input[name="fasilitas"]:checked')).map(cb => {
+                if (cb.value === 'Lainnya') {
+                    const extra = document.getElementById('input-fasilitas-lainnya').value.trim();
+                    return extra ? `Lainnya (${extra})` : 'Lainnya';
+                }
+                return cb.value;
+            });
+
+            // Validasi Form Ketat
+            const errors = [];
+            if (!/^(\+62|62|0)8[1-9][0-9]{6,11}$/.test(wa.replace(/[\s-]/g, ''))) {
+                errors.push("Format nomor WhatsApp tidak valid (gunakan awalan 08xx atau 628xx).");
+            }
+            if (!/^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(email)) {
+                errors.push("Format alamat email tidak valid.");
+            }
+            if (tanggal < getTodayWIB()) {
+                errors.push("Tanggal peminjaman tidak boleh di masa lalu.");
+            }
+
+            const roomObj = appState.rooms.find(r => r.nama === ruangan);
+            if (!roomObj) {
+                errors.push("Silakan pilih ruangan yang valid.");
+            } else if (jumlahPeserta > roomObj.kapasitas || jumlahPeserta < 1) {
+                errors.push(`Jumlah peserta (${jumlahPeserta} orang) melebihi kapasitas maksimal ${roomObj.nama} (${roomObj.kapasitas} orang).`);
+            }
+
+            const startMin = timeToMinutes(jamMulai);
+            const endMin = timeToMinutes(jamSelesai);
+            const opsStart = timeToMinutes(appState.settings.JAM_MULAI_OPS);
+            const opsEnd = timeToMinutes(appState.settings.JAM_SELESAI_OPS);
+            const maxDurMin = Number(appState.settings.MAX_DURASI_JAM) * 60;
+
+            if (endMin <= startMin) {
+                errors.push("Jam selesai harus setelah jam mulai.");
+            } else if ((endMin - startMin) > maxDurMin) {
+                errors.push(`Durasi peminjaman maksimal adalah ${appState.settings.MAX_DURASI_JAM} jam per sesi.`);
+            }
+            if (startMin < opsStart || endMin > opsEnd) {
+                errors.push(`Jam peminjaman harus berada dalam jam operasional (${appState.settings.JAM_MULAI_OPS} – ${appState.settings.JAM_SELESAI_OPS} WIB).`);
+            }
+
+            const conflicts = findScheduleConflicts(ruangan, tanggal, jamMulai, jamSelesai);
+            if (conflicts.length > 0) {
+                errors.push(`Jadwal bentrok dengan peminjaman ID ${conflicts[0].id} (${conflicts[0].jamMulai} - ${conflicts[0].jamSelesai} WIB).`);
+            }
+
+            if (errors.length > 0) {
+                alertText.innerHTML = `<ul class="list-disc pl-4 space-y-1">${errors.map(err => `<li>${escapeHTML(err)}</li>`).join('')}</ul>`;
+                alertBox.classList.remove('hidden');
+                alertBox.scrollIntoView({ behavior: 'smooth', block: 'center' });
+                return;
+            }
+
+            // Proses Submit
+            const btn = document.getElementById('btn-submit-booking');
+            btn.disabled = true;
+            btn.innerHTML = `<i class="fa-solid fa-spinner fa-spin"></i> Mengirim Pengajuan...`;
+
+            try {
+                const payload = {
+                    nama, statusPeminjam, nim, prodi, wa, email,
+                    ruangan, tanggal, jamMulai, jamSelesai,
+                    keperluan, jumlahPeserta,
+                    fasilitas: checkedFas.join(', ') || 'Standar Ruangan'
+                };
+                const res = await apiRequest('createBooking', payload);
+                if (res.status === 'success') {
+                    const created = res.data;
+                    document.getElementById('success-booking-id').textContent = created.id;
+                    document.getElementById('success-summary').innerHTML = `
+                        <p><strong>Peminjam:</strong> ${escapeHTML(created.nama)} (${escapeHTML(created.statusPeminjam)})</p>
+                        <p><strong>Ruangan:</strong> ${escapeHTML(created.ruangan)}</p>
+                        <p><strong>Waktu:</strong> ${formatTanggalIndo(created.tanggal)}, ${created.jamMulai} – ${created.jamSelesai} WIB</p>
+                        <p><strong>Status:</strong> <span class="text-amber-600 font-bold">Menunggu Verifikasi Sarpras</span></p>
+                    `;
+                    openModal('modal-success');
+                    document.getElementById('booking-form').reset();
+                    document.getElementById('room-info-hint').classList.add('hidden');
+                    document.getElementById('realtime-conflict-box').classList.add('hidden');
+                    await refreshAllData();
+                } else {
+                    showToast(res.message || "Gagal menyimpan pengajuan.", "error");
+                }
+            } catch (err) {
+                showToast(err.message, "error");
+            } finally {
+                btn.disabled = false;
+                btn.innerHTML = `<i class="fa-solid fa-paper-plane"></i> <span>Kirim Pengajuan Peminjaman</span>`;
+            }
+        }
+
+        function copyBookingId() {
+            const idText = document.getElementById('success-booking-id').textContent;
+            const temp = document.createElement('textarea');
+            temp.value = idText;
+            document.body.appendChild(temp);
+            temp.select();
+            document.execCommand('copy');
+            document.body.removeChild(temp);
+            showToast(`ID Peminjaman ${idText} berhasil disalin!`, 'success');
+        }
+
+        // ============================================================
+        // 6. TIMELINE KETERSEDIAAN & PELACAKAN STATUS
+        // ============================================================
+        function renderRoomTimeline() {
+            const dateInput = document.getElementById('schedule-date-filter');
+            if (!dateInput.value) dateInput.value = getTodayWIB();
+            const targetDate = dateInput.value;
+
+            const tbody = document.getElementById('timeline-tbody');
+            const activeRooms = appState.rooms.filter(r => r.status === 'Aktif');
+            const hours = [8, 9, 10, 11, 12, 13, 14, 15];
+
+            if (activeRooms.length === 0) {
+                tbody.innerHTML = `<tr><td colspan="9" class="py-8 text-center text-slate-400">Tidak ada ruangan aktif tersedia.</td></tr>`;
+                return;
+            }
+
+            tbody.innerHTML = activeRooms.map(room => {
+                const dayBookings = appState.bookings.filter(b =>
+                    b.ruangan === room.nama &&
+                    b.tanggal === targetDate &&
+                    ['Disetujui', 'Menunggu'].includes(b.status)
+                );
+
+                const cells = hours.map(h => {
+                    const slotStart = h * 60;
+                    const slotEnd = (h + 1) * 60;
+                    const match = dayBookings.find(b => timeToMinutes(b.jamMulai) < slotEnd && timeToMinutes(b.jamSelesai) > slotStart);
+
+                    if (match) {
+                        const isApproved = match.status === 'Disetujui';
+                        const bg = isApproved ? 'bg-emerald-500 text-white' : 'bg-amber-400 text-slate-950';
+                        return `
+                            <td class="p-1.5">
+                                <div title="${escapeHTML(match.keperluan)} (${escapeHTML(match.nama)} - ${match.status})" class="${bg} rounded-lg py-2 px-1 text-center font-bold text-[10px] truncate shadow-sm cursor-help">
+                                    ${isApproved ? 'Terisi' : 'Pending'}
+                                </div>
+                            </td>
+                        `;
+                    }
+                    return `
+                        <td class="p-1.5">
+                            <div onclick="quickBookRoom('${escapeHTML(room.nama)}', '${targetDate}', '${String(h).padStart(2,'0')}:00')" title="Klik untuk meminjam jam ${String(h).padStart(2,'0')}:00" class="bg-slate-100 dark:bg-slate-700/50 hover:bg-primary-100 dark:hover:bg-primary-900/40 text-slate-400 hover:text-primary-700 rounded-lg py-2 px-1 text-center text-[10px] cursor-pointer transition-colors">
+                                Kosong
+                            </div>
+                        </td>
+                    `;
+                }).join('');
+
+                return `
+                    <tr>
+                        <td class="py-3 px-3">
+                            <p class="font-bold text-slate-800 dark:text-white">${escapeHTML(room.nama)}</p>
+                            <p class="text-[11px] text-slate-400">Kapasitas: ${room.kapasitas} org</p>
+                        </td>
+                        ${cells}
+                    </tr>
+                `;
+            }).join('');
+        }
+
+        function quickBookRoom(roomName, dateStr, startTime) {
+            switchPeminjamTab('form');
+            document.getElementById('input-ruangan').value = roomName;
+            onRoomSelectChange();
+            document.getElementById('input-tanggal').value = dateStr;
+            document.getElementById('input-jam-mulai').value = startTime;
+            const endHour = Math.min(16, parseInt(startTime.split(':')[0], 10) + 2);
+            document.getElementById('input-jam-selesai').value = `${String(endHour).padStart(2, '0')}:00`;
+            checkRealtimeConflict();
+            showToast(`Form diisi otomatis untuk ${roomName}`, 'info');
+        }
+
+        function searchBookingStatus() {
+            const q = document.getElementById('input-track-query').value.trim().toLowerCase();
+            const container = document.getElementById('track-results');
+
+            if (!q) {
+                showToast("Masukkan ID Peminjaman atau Nomor WhatsApp terlebih dahulu.", "warning");
+                return;
+            }
+
+            const matches = appState.bookings.filter(b =>
+                b.id.toLowerCase().includes(q) ||
+                b.wa.replace(/[\s-]/g, '').includes(q.replace(/[\s-]/g, ''))
+            );
+
+            if (matches.length === 0) {
+                container.innerHTML = `
+                    <div class="text-center py-8 bg-slate-50 dark:bg-slate-900/40 rounded-2xl border border-dashed border-slate-300 dark:border-slate-700">
+                        <i class="fa-solid fa-folder-open text-3xl text-slate-400 mb-2"></i>
+                        <p class="text-sm font-semibold text-slate-700 dark:text-slate-300">Data pengajuan tidak ditemukan</p>
+                        <p class="text-xs text-slate-500 mt-1">Pastikan ID Peminjaman atau No. WhatsApp sesuai dengan yang didaftarkan.</p>
+                    </div>
+                `;
+                return;
+            }
+
+            container.innerHTML = matches.map(b => `
+                <div class="p-5 rounded-2xl border border-slate-200 dark:border-slate-700 bg-slate-50 dark:bg-slate-700/30 space-y-3">
+                    <div class="flex flex-wrap items-center justify-between gap-2 border-b border-slate-200 dark:border-slate-700 pb-3">
+                        <div>
+                            <span class="font-mono text-xs font-extrabold text-primary-700 dark:text-blue-400">${escapeHTML(b.id)}</span>
+                            <h4 class="font-heading font-bold text-base text-slate-900 dark:text-white">${escapeHTML(b.keperluan)}</h4>
+                        </div>
+                        ${getStatusBadge(b.status)}
+                    </div>
+                    <div class="grid grid-cols-1 sm:grid-cols-2 gap-2 text-xs text-slate-600 dark:text-slate-300">
+                        <p><i class="fa-solid fa-door-open w-4 text-primary-600"></i> <strong>Ruangan:</strong> ${escapeHTML(b.ruangan)}</p>
+                        <p><i class="fa-solid fa-calendar w-4 text-primary-600"></i> <strong>Tanggal:</strong> ${formatTanggalIndo(b.tanggal)}</p>
+                        <p><i class="fa-solid fa-clock w-4 text-primary-600"></i> <strong>Waktu:</strong> ${b.jamMulai} – ${b.jamSelesai} WIB</p>
+                        <p><i class="fa-solid fa-user w-4 text-primary-600"></i> <strong>Peminjam:</strong> ${escapeHTML(b.nama)} (${escapeHTML(b.prodi)})</p>
+                    </div>
+                    ${b.catatan ? `
+                        <div class="p-3 rounded-xl bg-white dark:bg-slate-800 border border-slate-200 dark:border-slate-600 text-xs">
+                            <span class="font-bold text-slate-700 dark:text-slate-200">Catatan Sarpras:</span> ${escapeHTML(b.catatan)}
+                        </div>
+                    ` : ''}
+                </div>
+            `).join('');
+        }
+
+        // ============================================================
+        // 7. AUTENTIKASI & DASHBOARD SARPRAS
+        // ============================================================
+        function requestSarprasAccess() {
+            if (appState.sarprasAuth.isAuthenticated) {
+                switchMainView('sarpras');
+            } else {
+                document.getElementById('pin-error-msg').classList.add('hidden');
+                document.getElementById('input-sarpras-pin').value = '';
+                openModal('modal-pin');
+            }
+        }
+
+        async function handlePinLogin(e) {
+            e.preventDefault();
+            const pin = document.getElementById('input-sarpras-pin').value.trim();
+            const verifier = document.getElementById('input-verifier-name').value.trim() || "Admin Sarpras SWINS";
+            const errEl = document.getElementById('pin-error-msg');
+            const btn = document.getElementById('btn-verify-pin');
+
+            btn.disabled = true;
+            btn.textContent = "Memverifikasi...";
+            errEl.classList.add('hidden');
+
+            try {
+                const res = await apiRequest('verifyPin', { pin });
+                if (res.status === 'success') {
+                    appState.sarprasAuth = {
+                        isAuthenticated: true,
+                        verifierName: verifier,
+                        pinToken: pin
+                    };
+                    closeModal('modal-pin');
+                    switchMainView('sarpras');
+                    showToast(`Selamat datang, ${verifier}!`, 'success');
+                } else {
+                    errEl.textContent = res.message || "PIN tidak valid.";
+                    errEl.classList.remove('hidden');
+                }
+            } catch (err) {
+                errEl.textContent = err.message;
+                errEl.classList.remove('hidden');
+            } finally {
+                btn.disabled = false;
+                btn.textContent = "Masuk ke Dashboard";
+            }
+        }
+
+        function logoutSarpras() {
+            appState.sarprasAuth = { isAuthenticated: false, verifierName: "", pinToken: "" };
+            switchMainView('peminjam');
+            showToast("Anda telah keluar dari sesi Sarpras.", "info");
+        }
+
+        function switchSarprasMenu(menu) {
+            ['dashboard', 'pengajuan', 'laporan', 'ruangan'].forEach(m => {
+                document.getElementById(`sarpras-sec-${m}`).classList.add('hidden');
+                const btn = document.getElementById(`nav-sarpras-${m}`);
+                btn.className = "sarpras-nav-btn w-full text-left px-3.5 py-2.5 rounded-xl text-sm font-medium text-slate-600 dark:text-slate-300 hover:bg-slate-100 dark:hover:bg-slate-700 flex items-center justify-between whitespace-nowrap";
+            });
+            document.getElementById(`sarpras-sec-${menu}`).classList.remove('hidden');
+            const activeBtn = document.getElementById(`nav-sarpras-${menu}`);
+            activeBtn.className = "sarpras-nav-btn w-full text-left px-3.5 py-2.5 rounded-xl text-sm font-semibold bg-primary-900 text-white flex items-center justify-between whitespace-nowrap";
+        }
+
+        function resetDashboardFilters() {
+            document.getElementById('dash-filter-start').value = '';
+            document.getElementById('dash-filter-end').value = '';
+            document.getElementById('dash-filter-room').value = 'ALL';
+            document.getElementById('dash-filter-status').value = 'ALL';
+            document.getElementById('dash-filter-search').value = '';
+            updateDashboardAnalytics();
+        }
+
+        function getFilteredDashboardBookings() {
+            const start = document.getElementById('dash-filter-start').value;
+            const end = document.getElementById('dash-filter-end').value;
+            const room = document.getElementById('dash-filter-room').value;
+            const status = document.getElementById('dash-filter-status').value;
+            const search = document.getElementById('dash-filter-search').value.trim().toLowerCase();
+
+            return appState.bookings.filter(b => {
+                if (start && b.tanggal < start) return false;
+                if (end && b.tanggal > end) return false;
+                if (room !== 'ALL' && b.ruangan !== room) return false;
+                if (status !== 'ALL' && b.status !== status) return false;
+                if (search && !(
+                    b.nama.toLowerCase().includes(search) ||
+                    b.keperluan.toLowerCase().includes(search) ||
+                    b.id.toLowerCase().includes(search) ||
+                    b.prodi.toLowerCase().includes(search)
+                )) return false;
+                return true;
+            });
+        }
+
+        function updateDashboardAnalytics() {
+            const filtered = getFilteredDashboardBookings();
+            const todayStr = getTodayWIB();
+
+            // Hitung KPI dari Data Nyata
+            const total = filtered.length;
+            const menunggu = filtered.filter(b => b.status === 'Menunggu').length;
+            const disetujui = filtered.filter(b => b.status === 'Disetujui').length;
+            const ditolak = filtered.filter(b => b.status === 'Ditolak').length;
+            const todayBookings = appState.bookings.filter(b => b.tanggal === todayStr && ['Disetujui', 'Menunggu'].includes(b.status));
+            
+            // Hitung Okupansi Ruangan Hari Ini (%) berdasarkan total jam operasional aktif
+            const activeRoomsCount = appState.rooms.filter(r => r.status === 'Aktif').length || 1;
+            const totalAvailableMinutes = activeRoomsCount * (timeToMinutes(appState.settings.JAM_SELESAI_OPS) - timeToMinutes(appState.settings.JAM_MULAI_OPS));
+            const usedMinutesToday = appState.bookings
+                .filter(b => b.tanggal === todayStr && b.status === 'Disetujui')
+                .reduce((acc, b) => acc + Math.max(0, timeToMinutes(b.jamSelesai) - timeToMinutes(b.jamMulai)), 0);
+            const occupancyPct = totalAvailableMinutes > 0 ? Math.min(100, Math.round((usedMinutesToday / totalAvailableMinutes) * 100)) : 0;
+
+            document.getElementById('kpi-total').textContent = total;
+            document.getElementById('kpi-menunggu').textContent = menunggu;
+            document.getElementById('kpi-disetujui').textContent = disetujui;
+            document.getElementById('kpi-ditolak').textContent = ditolak;
+            document.getElementById('kpi-hari-ini').textContent = todayBookings.length;
+            document.getElementById('kpi-okupansi').textContent = `${occupancyPct}%`;
+
+            // Update badge antrean di sidebar
+            const globalPending = appState.bookings.filter(b => b.status === 'Menunggu').length;
+            document.getElementById('badge-pending-count').textContent = globalPending;
+
+            renderDashboardCharts(filtered);
+            renderDashboardWidgets(todayStr);
+        }
+
+        function renderDashboardCharts(data) {
+            const isDark = document.documentElement.classList.contains('dark');
+            const textColor = isDark ? '#cbd5e1' : '#475569';
+            const gridColor = isDark ? 'rgba(255,255,255,0.08)' : 'rgba(0,0,0,0.06)';
+
+            // 1. Tren per Tanggal
+            const dateCounts = {};
+            data.forEach(b => { dateCounts[b.tanggal] = (dateCounts[b.tanggal] || 0) + 1; });
+            const sortedDates = Object.keys(dateCounts).sort();
+
+            destroyChart('trend');
+            charts.trend = new Chart(document.getElementById('chart-trend'), {
+                type: 'line',
+                data: {
+                    labels: sortedDates.length ? sortedDates : ['Belum ada data'],
+                    datasets: [{
+                        label: 'Jumlah Peminjaman',
+                        data: sortedDates.length ? sortedDates.map(d => dateCounts[d]) : [0],
+                        borderColor: '#1e3a8a',
+                        backgroundColor: 'rgba(30, 58, 138, 0.15)',
+                        fill: true,
+                        tension: 0.35,
+                        pointRadius: 4
+                    }]
+                },
+                options: {
+                    responsive: true, maintainAspectRatio: false,
+                    plugins: { legend: { display: false } },
+                    scales: {
+                        x: { ticks: { color: textColor, font: { size: 10 } }, grid: { display: false } },
+                        y: { beginAtZero: true, ticks: { stepSize: 1, color: textColor, font: { size: 10 } }, grid: { color: gridColor } }
+                    }
+                }
+            });
+
+            // 2. Komposisi Status (Doughnut)
+            const statuses = ['Menunggu', 'Disetujui', 'Ditolak', 'Selesai', 'Dibatalkan'];
+            const statusCounts = statuses.map(s => data.filter(b => b.status === s).length);
+            destroyChart('status');
+            charts.status = new Chart(document.getElementById('chart-status'), {
+                type: 'doughnut',
+                data: {
+                    labels: statuses,
+                    datasets: [{
+                        data: statusCounts,
+                        backgroundColor: ['#f59e0b', '#10b981', '#ef4444', '#3b82f6', '#64748b'],
+                        borderWidth: 0
+                    }]
+                },
+                options: {
+                    responsive: true, maintainAspectRatio: false,
+                    plugins: { legend: { position: 'bottom', labels: { color: textColor, boxWidth: 10, font: { size: 10 } } } }
+                }
+            });
+
+            // 3. Penggunaan per Ruangan (Horizontal Bar)
+            const roomNames = appState.rooms.map(r => r.nama);
+            const roomCounts = roomNames.map(rn => data.filter(b => b.ruangan === rn).length);
+            destroyChart('room');
+            charts.room = new Chart(document.getElementById('chart-room'), {
+                type: 'bar',
+                data: {
+                    labels: roomNames.map(n => n.replace('Ruang ', '')),
+                    datasets: [{
+                        label: 'Total Sesi',
+                        data: roomCounts,
+                        backgroundColor: '#2563eb',
+                        borderRadius: 6
+                    }]
+                },
+                options: {
+                    indexAxis: 'y', responsive: true, maintainAspectRatio: false,
+                    plugins: { legend: { display: false } },
+                    scales: {
+                        x: { beginAtZero: true, ticks: { stepSize: 1, color: textColor, font: { size: 10 } }, grid: { color: gridColor } },
+                        y: { ticks: { color: textColor, font: { size: 10 } }, grid: { display: false } }
+                    }
+                }
+            });
+
+            // 4. Distribusi Jam Sibuk
+            const hourSlots = ['08:00', '09:00', '10:00', '11:00', '12:00', '13:00', '14:00', '15:00'];
+            const hourCounts = hourSlots.map(hs => {
+                const hMin = timeToMinutes(hs);
+                return data.filter(b => timeToMinutes(b.jamMulai) <= hMin && timeToMinutes(b.jamSelesai) > hMin).length;
+            });
+            destroyChart('hour');
+            charts.hour = new Chart(document.getElementById('chart-hour'), {
+                type: 'bar',
+                data: {
+                    labels: hourSlots,
+                    datasets: [{
+                        label: 'Ruangan Terpakai',
+                        data: hourCounts,
+                        backgroundColor: '#f59e0b',
+                        borderRadius: 6
+                    }]
+                },
+                options: {
+                    responsive: true, maintainAspectRatio: false,
+                    plugins: { legend: { display: false } },
+                    scales: {
+                        x: { ticks: { color: textColor, font: { size: 10 } }, grid: { display: false } },
+                        y: { beginAtZero: true, ticks: { stepSize: 1, color: textColor, font: { size: 10 } }, grid: { color: gridColor } }
+                    }
+                }
+            });
+
+            // 5. Kategori Peminjam
+            const roles = ['Dosen', 'Mahasiswa', 'Struktural', 'BEM/ UKM/ Organisasi', 'Umum'];
+            const roleCounts = roles.map(rl => data.filter(b => b.statusPeminjam === rl).length);
+            destroyChart('role');
+            charts.role = new Chart(document.getElementById('chart-role'), {
+                type: 'pie',
+                data: {
+                    labels: roles,
+                    datasets: [{
+                        data: roleCounts,
+                        backgroundColor: ['#1e3a8a', '#0ea5e9', '#8b5cf6', '#f59e0b', '#10b981'],
+                        borderWidth: 0
+                    }]
+                },
+                options: {
+                    responsive: true, maintainAspectRatio: false,
+                    plugins: { legend: { position: 'bottom', labels: { color: textColor, boxWidth: 10, font: { size: 10 } } } }
+                }
+            });
+        }
+
+        function destroyChart(key) {
+            if (charts[key]) { charts[key].destroy(); charts[key] = null; }
+        }
+
+        function renderDashboardWidgets(todayStr) {
+            // Widget 1: Antrean Menunggu Verifikasi
+            const pendingList = appState.bookings.filter(b => b.status === 'Menunggu').slice(0, 4);
+            const wPending = document.getElementById('widget-pending-list');
+            wPending.innerHTML = pendingList.length ? pendingList.map(b => `
+                <div class="p-2.5 rounded-xl bg-amber-50/70 dark:bg-amber-900/20 border border-amber-200/70 dark:border-amber-800/40 flex items-center justify-between gap-2">
+                    <div class="min-w-0">
+                        <p class="font-bold text-slate-800 dark:text-white truncate">${escapeHTML(b.ruangan)}</p>
+                        <p class="text-[11px] text-slate-500 truncate">${escapeHTML(b.nama)} &bull; ${b.tanggal} (${b.jamMulai})</p>
+                    </div>
+                    <button onclick="openDetailModal('${b.id}')" class="px-2.5 py-1 rounded-lg bg-primary-900 text-white text-[11px] font-semibold flex-shrink-0">Proses</button>
+                </div>
+            `).join('') : `<p class="text-slate-400 text-center py-4">Tidak ada antrean menunggu verifikasi.</p>`;
+
+            // Widget 2: Jadwal Hari Ini
+            const todayList = appState.bookings.filter(b => b.tanggal === todayStr && b.status === 'Disetujui').slice(0, 4);
+            const wToday = document.getElementById('widget-today-list');
+            wToday.innerHTML = todayList.length ? todayList.map(b => `
+                <div class="p-2.5 rounded-xl bg-slate-50 dark:bg-slate-700/40 border border-slate-100 dark:border-slate-700 flex items-center justify-between">
+                    <div class="min-w-0">
+                        <p class="font-bold text-slate-800 dark:text-white truncate">${escapeHTML(b.ruangan)}</p>
+                        <p class="text-[11px] text-slate-500 truncate">${escapeHTML(b.keperluan)}</p>
+                    </div>
+                    <span class="px-2 py-0.5 rounded bg-emerald-100 text-emerald-800 font-bold text-[10px] flex-shrink-0">${b.jamMulai}-${b.jamSelesai}</span>
+                </div>
+            `).join('') : `<p class="text-slate-400 text-center py-4">Belum ada jadwal disetujui hari ini.</p>`;
+
+            // Widget 3: Top 5 Ruangan Terfavorit
+            const roomFreq = {};
+            appState.bookings.forEach(b => { roomFreq[b.ruangan] = (roomFreq[b.ruangan] || 0) + 1; });
+            const topRooms = Object.entries(roomFreq).sort((a, b) => b[1] - a[1]).slice(0, 5);
+            const maxFreq = topRooms.length ? topRooms[0][1] : 1;
+            const wTop = document.getElementById('widget-top-rooms');
+            wTop.innerHTML = topRooms.length ? topRooms.map(([name, count]) => `
+                <div>
+                    <div class="flex justify-between mb-1">
+                        <span class="font-semibold text-slate-700 dark:text-slate-200 truncate">${escapeHTML(name)}</span>
+                        <span class="font-bold text-primary-700 dark:text-blue-400">${count}x</span>
+                    </div>
+                    <div class="w-full bg-slate-100 dark:bg-slate-700 h-2 rounded-full overflow-hidden">
+                        <div class="bg-primary-800 h-full rounded-full" style="width: ${Math.round((count / maxFreq) * 100)}%"></div>
+                    </div>
+                </div>
+            `).join('') : `<p class="text-slate-400 text-center py-4">Belum ada data statistik ruangan.</p>`;
+        }
+
+        // ============================================================
+        // 8. MANAJEMEN PENGAJUAN & VERIFIKASI SARPRAS
+        // ============================================================
+        function sortManagement(field) {
+            if (mgmtSortField === field) {
+                mgmtSortAsc = !mgmtSortAsc;
+            } else {
+                mgmtSortField = field;
+                mgmtSortAsc = true;
+            }
+            renderManagementTable();
+        }
+
+        function renderManagementTable() {
+            const q = document.getElementById('mgmt-search').value.trim().toLowerCase();
+            const st = document.getElementById('mgmt-status-filter').value;
+
+            let list = appState.bookings.filter(b => {
+                if (st !== 'ALL' && b.status !== st) return false;
+                if (q && !(
+                    b.id.toLowerCase().includes(q) ||
+                    b.nama.toLowerCase().includes(q) ||
+                    b.ruangan.toLowerCase().includes(q) ||
+                    b.keperluan.toLowerCase().includes(q)
+                )) return false;
+                return true;
+            });
+
+            list.sort((a, b) => {
+                const valA = String(a[mgmtSortField] || '').toLowerCase();
+                const valB = String(b[mgmtSortField] || '').toLowerCase();
+                return mgmtSortAsc ? valA.localeCompare(valB) : valB.localeCompare(valA);
+            });
+
+            const totalItems = list.length;
+            const totalPages = Math.max(1, Math.ceil(totalItems / mgmtPerPage));
+            if (mgmtPage > totalPages) mgmtPage = totalPages;
+            const startIdx = (mgmtPage - 1) * mgmtPerPage;
+            const paged = list.slice(startIdx, startIdx + mgmtPerPage);
+
+            const tbody = document.getElementById('mgmt-tbody');
+            tbody.innerHTML = paged.length ? paged.map(b => `
+                <tr class="hover:bg-slate-50 dark:hover:bg-slate-700/30 transition-colors">
+                    <td class="py-3 px-3 font-mono font-bold text-primary-800 dark:text-blue-400">${escapeHTML(b.id)}</td>
+                    <td class="py-3 px-3">
+                        <p class="font-bold text-slate-800 dark:text-white">${escapeHTML(b.nama)}</p>
+                        <p class="text-[11px] text-slate-500">${escapeHTML(b.statusPeminjam)} &bull; ${escapeHTML(b.prodi)}</p>
+                    </td>
+                    <td class="py-3 px-3">
+                        <p class="font-semibold text-slate-800 dark:text-slate-200">${escapeHTML(b.ruangan)}</p>
+                        <p class="text-[11px] text-slate-500">${b.jumlahPeserta} Peserta</p>
+                    </td>
+                    <td class="py-3 px-3">
+                        <p class="font-semibold">${b.tanggal}</p>
+                        <p class="text-[11px] text-slate-500">${b.jamMulai} – ${b.jamSelesai} WIB</p>
+                    </td>
+                    <td class="py-3 px-3">${getStatusBadge(b.status)}</td>
+                    <td class="py-3 px-3 text-right space-x-1">
+                        <button onclick="openDetailModal('${b.id}')" class="px-3 py-1.5 rounded-lg bg-primary-900 hover:bg-primary-800 text-white font-semibold text-[11px]">
+                            <i class="fa-solid fa-eye mr-1"></i> Detail & Verifikasi
+                        </button>
+                    </td>
+                </tr>
+            `).join('') : `<tr><td colspan="6" class="py-8 text-center text-slate-400">Tidak ada data pengajuan yang sesuai filter.</td></tr>`;
+
+            document.getElementById('mgmt-pagination-info').textContent = `Menampilkan ${paged.length} dari ${totalItems} pengajuan`;
+            const pagCtrl = document.getElementById('mgmt-pagination-controls');
+            pagCtrl.innerHTML = '';
+            for (let p = 1; p <= totalPages; p++) {
+                const btn = document.createElement('button');
+                btn.textContent = p;
+                btn.className = p === mgmtPage
+                    ? "px-3 py-1 rounded-lg bg-primary-900 text-white font-bold"
+                    : "px-3 py-1 rounded-lg bg-slate-100 dark:bg-slate-700 hover:bg-slate-200";
+                btn.onclick = () => { mgmtPage = p; renderManagementTable(); };
+                pagCtrl.appendChild(btn);
+            }
+        }
+
+        function openDetailModal(id) {
+            const b = appState.bookings.find(item => item.id === id);
+            if (!b) return;
+            appState.selectedBookingId = id;
+
+            document.getElementById('detail-id').textContent = b.id;
+            document.getElementById('detail-catatan').value = b.catatan || '';
+            document.getElementById('detail-content').innerHTML = `
+                <div class="grid grid-cols-1 sm:grid-cols-2 gap-2.5 bg-slate-50 dark:bg-slate-700/30 p-3.5 rounded-xl">
+                    <p><strong>Nama Peminjam:</strong> ${escapeHTML(b.nama)}</p>
+                    <p><strong>Status Peminjam:</strong> ${escapeHTML(b.statusPeminjam)}</p>
+                    <p><strong>NIM/NIP:</strong> ${escapeHTML(b.nim)}</p>
+                    <p><strong>Prodi/Unit:</strong> ${escapeHTML(b.prodi)}</p>
+                    <p><strong>WhatsApp:</strong> <a href="https://wa.me/${b.wa.replace(/^0/, '62')}" target="_blank" class="text-emerald-600 underline font-semibold">${escapeHTML(b.wa)}</a></p>
+                    <p><strong>Email:</strong> ${escapeHTML(b.email)}</p>
+                    <p><strong>Ruangan:</strong> ${escapeHTML(b.ruangan)}</p>
+                    <p><strong>Jumlah Peserta:</strong> ${b.jumlahPeserta} Orang</p>
+                    <p><strong>Tanggal:</strong> ${formatTanggalIndo(b.tanggal)}</p>
+                    <p><strong>Waktu:</strong> ${b.jamMulai} – ${b.jamSelesai} WIB</p>
+                </div>
+                <p><strong>Keperluan:</strong> ${escapeHTML(b.keperluan)}</p>
+                <p><strong>Kebutuhan Fasilitas:</strong> ${escapeHTML(b.fasilitas)}</p>
+                <p><strong>Status Saat Ini:</strong> ${getStatusBadge(b.status)}</p>
+                ${b.diverifikasiOleh ? `<p class="text-[11px] text-slate-400">Terakhir diverifikasi oleh ${escapeHTML(b.diverifikasiOleh)} pada ${escapeHTML(b.waktuVerifikasi)}</p>` : ''}
+            `;
+            openModal('modal-detail');
+        }
+
+        async function processBookingAction(newStatus) {
+            const id = appState.selectedBookingId;
+            const b = appState.bookings.find(item => item.id === id);
+            if (!b) return;
+
+            const catatan = document.getElementById('detail-catatan').value.trim();
+
+            if (newStatus === 'Ditolak' && !catatan) {
+                showToast("Wajib mengisi catatan Sarpras saat menolak pengajuan!", "warning");
+                document.getElementById('detail-catatan').focus();
+                return;
+            }
+
+            // Cek ulang bentrok jadwal saat menyetujui
+            if (newStatus === 'Disetujui') {
+                const conflicts = findScheduleConflicts(b.ruangan, b.tanggal, b.jamMulai, b.jamSelesai, b.id)
+                    .filter(c => c.status === 'Disetujui');
+                if (conflicts.length > 0) {
+                    showToast(`Gagal menyetujui! Bentrok dengan pengajuan ${conflicts[0].id} yang sudah Disetujui.`, "error");
+                    return;
+                }
+            }
+
+            try {
+                const res = await apiRequest('updateBookingStatus', {
+                    id: b.id,
+                    status: newStatus,
+                    catatan,
+                    verifier: appState.sarprasAuth.verifierName,
+                    pin: appState.sarprasAuth.pinToken
+                });
+
+                if (res.status === 'success') {
+                    closeModal('modal-detail');
+                    showToast(`Status pengajuan ${b.id} diubah menjadi ${newStatus}.`, 'success');
+                    await refreshAllData();
+                } else {
+                    showToast(res.message || "Gagal memperbarui status.", "error");
+                }
+            } catch (err) {
+                showToast(err.message, "error");
+            }
+        }
+
+        // ============================================================
+        // 9. LAPORAN & EKSPOR (EXCEL, PDF, PRINT)
+        // ============================================================
+        function applyReportPreset() {
+            const preset = document.getElementById('rep-preset').value;
+            const today = getTodayWIB();
+            const startEl = document.getElementById('rep-start');
+            const endEl = document.getElementById('rep-end');
+
+            if (preset === 'all') { startEl.value = ''; endEl.value = ''; }
+            if (preset === 'today') { startEl.value = today; endEl.value = today; }
+            if (preset === 'week') { startEl.value = addDaysStr(today, -7); endEl.value = today; }
+            if (preset === 'month') { startEl.value = today.slice(0, 8) + '01'; endEl.value = today; }
+            renderReportPreview();
+        }
+
+        function getFilteredReportData() {
+            const start = document.getElementById('rep-start').value;
+            const end = document.getElementById('rep-end').value;
+            const status = document.getElementById('rep-status').value;
+
+            return appState.bookings.filter(b => {
+                if (start && b.tanggal < start) return false;
+                if (end && b.tanggal > end) return false;
+                if (status !== 'ALL' && b.status !== status) return false;
+                return true;
+            });
+        }
+
+        function renderReportPreview() {
+            const data = getFilteredReportData();
+            const start = document.getElementById('rep-start').value;
+            const end = document.getElementById('rep-end').value;
+            document.getElementById('rep-period-label').textContent = (start || end)
+                ? `Periode: ${start || 'Awal'} s/d ${end || 'Sekarang'}`
+                : `Periode: Semua Waktu (${data.length} Transaksi)`;
+
+            const tbody = document.getElementById('rep-tbody');
+            tbody.innerHTML = data.length ? data.map((b, i) => `
+                <tr>
+                    <td class="py-2 px-2">${i + 1}</td>
+                    <td class="py-2 px-2 font-mono">${escapeHTML(b.id)}</td>
+                    <td class="py-2 px-2">${b.tanggal}<br><span class="text-[10px] text-slate-500">${b.jamMulai}-${b.jamSelesai}</span></td>
+                    <td class="py-2 px-2 font-semibold">${escapeHTML(b.ruangan)}</td>
+                    <td class="py-2 px-2">${escapeHTML(b.nama)}<br><span class="text-[10px] text-slate-500">${escapeHTML(b.prodi)}</span></td>
+                    <td class="py-2 px-2">${escapeHTML(b.keperluan)}</td>
+                    <td class="py-2 px-2 font-bold">${escapeHTML(b.status)}</td>
+                </tr>
+            `).join('') : `<tr><td colspan="7" class="py-6 text-center text-slate-400">Tidak ada data laporan pada periode ini.</td></tr>`;
+        }
+
+        function exportToExcel() {
+            const data = getFilteredReportData();
+            if (!data.length) return showToast("Tidak ada data untuk diekspor.", "warning");
+
+            const rows = data.map((b, idx) => ({
+                "No": idx + 1,
+                "ID Peminjaman": b.id,
+                "Timestamp": b.timestamp,
+                "Nama Peminjam": b.nama,
+                "Status Peminjam": b.statusPeminjam,
+                "NIM/NIP": b.nim,
+                "Prodi/Unit": b.prodi,
+                "No. WhatsApp": b.wa,
+                "Email": b.email,
+                "Ruangan": b.ruangan,
+                "Tanggal": b.tanggal,
+                "Jam Mulai": b.jamMulai,
+                "Jam Selesai": b.jamSelesai,
+                "Keperluan": b.keperluan,
+                "Jumlah Peserta": b.jumlahPeserta,
+                "Fasilitas": b.fasilitas,
+                "Status": b.status,
+                "Catatan Sarpras": b.catatan
+            }));
+
+            const ws = XLSX.utils.json_to_sheet(rows);
+            const wb = XLSX.utils.book_new();
+            XLSX.utils.book_append_sheet(wb, ws, "Laporan_Peminjaman");
+            XLSX.writeFile(wb, `Laporan_Peminjaman_Ruangan_SWINS_${getTodayWIB()}.xlsx`);
+            showToast("File Excel berhasil diunduh!", "success");
+        }
+
+        function exportToPDF() {
+            const data = getFilteredReportData();
+            if (!data.length) return showToast("Tidak ada data untuk diekspor.", "warning");
+
+            const { jsPDF } = window.jspdf;
+            const doc = new jsPDF('l', 'mm', 'a4');
+
+            // Kop Laporan Resmi
+            doc.setFontSize(14);
+            doc.setFont("helvetica", "bold");
+            doc.text("SWINS – BAGIAN SARANA & PRASARANA", 148, 15, { align: "center" });
+            doc.setFontSize(10);
+            doc.setFont("helvetica", "normal");
+            doc.text("Laporan Rekapitulasi Peminjaman Ruangan Kelas & Laboratorium", 148, 21, { align: "center" });
+            doc.setFontSize(9);
+            doc.text(`Dicetak pada: ${formatTanggalIndo(getTodayWIB())} | ${document.getElementById('rep-period-label').textContent}`, 148, 27, { align: "center" });
+            doc.line(14, 30, 283, 30);
+
+            const tableRows = data.map((b, i) => [
+                i + 1,
+                b.id,
+                `${b.tanggal}\n${b.jamMulai}-${b.jamSelesai}`,
+                b.ruangan,
+                `${b.nama}\n(${b.prodi})`,
+                b.keperluan,
+                b.status
+            ]);
+
+            doc.autoTable({
+                startY: 34,
+                head: [['No', 'ID Peminjaman', 'Waktu', 'Ruangan', 'Peminjam', 'Keperluan', 'Status']],
+                body: tableRows,
+                styles: { fontSize: 8, cellPadding: 2.5 },
+                headStyles: { fillColor: [30, 58, 138] }
+            });
+
+            // Kolom Tanda Tangan Kepala Sarpras
+            const finalY = doc.lastAutoTable.finalY + 15;
+            doc.setFontSize(9);
+            doc.text(`Jakarta, ${formatTanggalIndo(getTodayWIB())}`, 220, finalY);
+            doc.text("Kepala Bagian Sarana & Prasarana SWINS,", 220, finalY + 5);
+            doc.text("( .................................................... )", 220, finalY + 25);
+
+            doc.save(`Laporan_Sarpras_SWINS_${getTodayWIB()}.pdf`);
+            showToast("Laporan PDF berhasil diunduh!", "success");
+        }
+
+        function openSpreadsheetLink() {
+            window.open(appState.settings.SPREADSHEET_URL || "https://docs.google.com/spreadsheets", "_blank");
+        }
+
+        // ============================================================
+        // 10. MASTER RUANGAN (SARPRAS)
+        // ============================================================
+        function renderMasterRoomTable() {
+            const tbody = document.getElementById('master-room-tbody');
+            tbody.innerHTML = appState.rooms.map(r => `
+                <tr class="hover:bg-slate-50 dark:hover:bg-slate-700/30">
+                    <td class="py-3 px-3 font-mono font-bold">${escapeHTML(r.kode)}</td>
+                    <td class="py-3 px-3 font-bold text-slate-800 dark:text-white">${escapeHTML(r.nama)}</td>
+                    <td class="py-3 px-3">${escapeHTML(r.gedung)}</td>
+                    <td class="py-3 px-3 font-semibold">${r.kapasitas} Orang</td>
+                    <td class="py-3 px-3 text-slate-500">${escapeHTML(r.fasilitas)}</td>
+                    <td class="py-3 px-3">
+                        <span class="px-2.5 py-0.5 rounded-full text-[11px] font-bold ${r.status === 'Aktif' ? 'bg-emerald-100 text-emerald-800' : 'bg-slate-200 text-slate-600'}">
+                            ${escapeHTML(r.status)}
+                        </span>
+                    </td>
+                    <td class="py-3 px-3 text-right">
+                        <button onclick="openRoomModal('${escapeHTML(r.kode)}')" class="px-3 py-1.5 rounded-lg bg-slate-100 dark:bg-slate-700 hover:bg-slate-200 font-semibold">
+                            <i class="fa-solid fa-pen-to-square mr-1"></i> Ubah
+                        </button>
+                    </td>
+                </tr>
+            `).join('');
+        }
+
+        function openRoomModal(kode = null) {
+            const title = document.getElementById('modal-room-title');
+            const modeInp = document.getElementById('room-edit-mode');
+            const kodeInp = document.getElementById('room-kode');
+
+            if (kode) {
+                const r = appState.rooms.find(item => item.kode === kode);
+                if (!r) return;
+                title.textContent = "Ubah Data Ruangan";
+                modeInp.value = "edit";
+                kodeInp.value = r.kode;
+                kodeInp.readOnly = true;
+                document.getElementById('room-nama').value = r.nama;
+                document.getElementById('room-gedung').value = r.gedung;
+                document.getElementById('room-kapasitas').value = r.kapasitas;
+                document.getElementById('room-fasilitas').value = r.fasilitas;
+                document.getElementById('room-status').value = r.status;
+            } else {
+                title.textContent = "Tambah Ruangan Baru";
+                modeInp.value = "add";
+                kodeInp.value = "";
+                kodeInp.readOnly = false;
+                document.getElementById('room-nama').value = "";
+                document.getElementById('room-gedung').value = "";
+                document.getElementById('room-kapasitas').value = "";
+                document.getElementById('room-fasilitas').value = "";
+                document.getElementById('room-status').value = "Aktif";
+            }
+            openModal('modal-room');
+        }
+
+        async function handleSaveRoom(e) {
+            e.preventDefault();
+            const mode = document.getElementById('room-edit-mode').value;
+            const room = {
+                kode: document.getElementById('room-kode').value.trim(),
+                nama: document.getElementById('room-nama').value.trim(),
+                gedung: document.getElementById('room-gedung').value.trim(),
+                kapasitas: parseInt(document.getElementById('room-kapasitas').value, 10),
+                fasilitas: document.getElementById('room-fasilitas').value.trim(),
+                status: document.getElementById('room-status').value
+            };
+
+            try {
+                const res = await apiRequest('saveRoom', {
+                    mode,
+                    room,
+                    pin: appState.sarprasAuth.pinToken
+                });
+                if (res.status === 'success') {
+                    closeModal('modal-room');
+                    showToast("Data ruangan berhasil disimpan!", "success");
+                    await refreshAllData();
+                } else {
+                    showToast(res.message || "Gagal menyimpan ruangan.", "error");
+                }
+            } catch (err) {
+                showToast(err.message, "error");
+            }
+        }
+
+        // ============================================================
+        // 11. INISIALISASI APLIKASI SAAT HALAMAN DIMUAT
+        // ============================================================
+        window.addEventListener('DOMContentLoaded', async () => {
+            const today = getTodayWIB();
+            document.getElementById('input-tanggal').min = today;
+            document.getElementById('input-tanggal').value = today;
+            document.getElementById('schedule-date-filter').value = today;
+            document.getElementById('current-date-display').textContent = formatTanggalIndo(today) + " (WIB)";
+
+            if (IS_DEMO_MODE) {
+                document.getElementById('demo-banner').classList.remove('hidden');
+                initDemoData();
+            }
+
+            await refreshAllData();
+        });
+    </script>
+</body>
+</html>
